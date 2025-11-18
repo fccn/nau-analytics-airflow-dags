@@ -11,7 +11,7 @@ def _hello():
 with DAG(
     dag_id="test_hello_world",
     start_date=datetime(2025, 1, 1),
-    schedule_interval=None,  # só trigger manual
+    schedule=None,  # só trigger manual
     catchup=False,
     tags=["test", "debug"],
 ) as dag:
