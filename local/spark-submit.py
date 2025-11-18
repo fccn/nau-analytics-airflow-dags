@@ -43,7 +43,7 @@ with DAG(
     "--conf", "spark.kubernetes.submission.waitAppCompletion=true",
     "--conf", "spark.kubernetes.driver.deleteOnTermination=true",
     "--conf", "spark.kubernetes.executor.deleteOnTermination=true",
-    "local:///opt/spark/work-dir/src/hello_spark.py"
+    "local:///opt/spark/work-dir/src/misc/hello_spark.py"
     ],
     name='spark-submit-task',
     task_id='spark_submit_task',
