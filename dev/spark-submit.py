@@ -10,7 +10,7 @@ def say_hello() -> None:
 with DAG(
     dag_id="spark_submit_dag",
     start_date=datetime(2023, 1, 1),
-    schedule=None,  # Run on demand
+    schedule="0 17 * * *",  # Run at 17:00 every day
     catchup=False,
     tags=["example"],
 ) as dag:
