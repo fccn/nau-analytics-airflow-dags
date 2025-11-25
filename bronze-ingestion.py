@@ -25,10 +25,10 @@ with DAG(
     service_account_name='spark-role',
 
     # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:c54a06e',
+    image='nauedu/nau-analytics-spark-shell:d465952',
     image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
-    cmds=[],
+    cmds=['spark-submit'],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
