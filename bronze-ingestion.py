@@ -26,9 +26,9 @@ with DAG(
 
     # ✔ official spark image built for k8s
     image='nauedu/nau-analytics-spark-shell:816b869',
-    image_pull_policy='Always',
+    image_pull_policy='always',
     # ✔ override entrypoint to run spark-submit
-    cmds=['spark-submit'],
+    cmds=[],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
