@@ -41,6 +41,7 @@ with DAG(
     "--conf", "spark.executor.cores=2",
     "--conf", "spark.executor.memory=2g",
     "--conf", "spark.kubernetes.submission.waitAppCompletion=true",
+    "--conf", "spark.kubernetes.submission.reportFailureOnDriverError=true",
     "--conf", "spark.kubernetes.driver.deleteOnTermination=true",
     "--conf", "spark.kubernetes.executor.deleteOnTermination=true",
     "local:///opt/spark/work-dir/src/bronze/get_full_tables.py"
