@@ -26,7 +26,7 @@ with DAG(
 
     # ✔ official spark image built for k8s
     image='nauedu/nau-analytics-spark-shell:816b869',
-    image_pull_policy='always',
+    image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
     cmds=[],
 
