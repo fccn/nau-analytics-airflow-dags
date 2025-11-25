@@ -28,7 +28,7 @@ with DAG(
     image='nauedu/nau-analytics-spark-shell:816b869',
     image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
-    cmds=[],
+    cmds=["-c"],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
