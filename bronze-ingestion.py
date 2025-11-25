@@ -32,22 +32,31 @@ with DAG(
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
-    "--master", "k8s://https://kubernetes.default.svc:443",
-    "--deploy-mode", "cluster",
-    "--name", "spark-pi",
-    "--conf", "spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements",
-    "--conf", "spark.kubernetes.namespace=analytics",
-    "--conf", "spark.kubernetes.authenticate.driver.serviceAccountName=spark-role",
-    "--conf", "spark.executor.instances=3",
-    "--conf", "spark.executor.cores=2",
-    "--conf", "spark.executor.memory=2g",
-    "--conf", "spark.kubernetes.submission.waitAppCompletion=true",
-    "--conf", "spark.kubernetes.submission.reportFailureOnDriverError=true",
-    "--conf", "spark.kubernetes.driver.deleteOnTermination=true",
-    "--conf", "spark.kubernetes.executor.deleteOnTermination=true",
-    "--conf", "spark.kubernetes.container.image.pullPolicy=Always",
-    "local:///opt/spark/work-dir/src/bronze/get_full_tables.py"
-    ],
+   """
+       --master k8s://https://kubernetes.default.svc:443 \
+       --deploy-mode cluster \
+       --name spark-pi \
+       --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
+       --conf spark.kubernetes.namespace=analytics \
+       --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
+       --conf spark.executor.instances=3 \
+       --conf spark.executor.cores=2 \
+       --conf spark.executor.memory=2g \
+       --conf spark.kubernetes.submission.waitAppCompletion=true \
+       --conf spark.kubernetes.submission.reportFailureOnDriverError=true \
+       --conf spark.kubernetes.driver.deleteOnTermination=true \
+       --conf spark.kubernetes.executor.deleteOnTermination=true \
+       --conf spark.kubernetes.container.image.pullPolicy=Always \
+       local:///opt/spark/work-dir/src/bronze/get_full_tables.py;
+   # Capture exit code
+   EXIT_CODE=$?;
+   echo "Spark exit code: $EXIT_CODE";
+   # Write to XCom so Airflow receives the exit code
+   echo "{\\"spark_exit_code\\": $EXIT_CODE}" > /airflow/xcom/return.json;
+   # Always exit 0 so the KubernetesPodOperator "succeeds"
+   exit 0;
+   """    
+   ],
     name='spark-submit-task',
     task_id='spark_submit_task',
     get_logs=True,
