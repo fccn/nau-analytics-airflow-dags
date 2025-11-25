@@ -28,11 +28,12 @@ with DAG(
     image='nauedu/nau-analytics-spark-shell:d465952',
     image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
-    cmds=['spark-submit'],
+    cmds=['/bin/bash','-c'],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
    """
+         spark-submit \
        --master k8s://https://kubernetes.default.svc:443 \
        --deploy-mode cluster \
        --name spark-pi \
