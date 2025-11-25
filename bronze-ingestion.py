@@ -51,7 +51,6 @@ with DAG(
     name='spark-submit-task',
     task_id='spark_submit_task',
     get_logs=True,
-    do_xcom_push=True,
     on_finish_action="keep_pod",
     )
 
