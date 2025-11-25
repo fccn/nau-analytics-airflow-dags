@@ -26,8 +26,9 @@ with DAG(
 
     # ✔ official spark image built for k8s
     image='nauedu/nau-analytics-spark-shell:featurespark-shell-docker-image',
+    image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
-    cmds=['spark-submit'],
+    cmds=[],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
