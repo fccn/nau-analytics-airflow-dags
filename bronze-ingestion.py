@@ -1,12 +1,23 @@
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator #type: ignore
-from airflow.sdk import Variable #type: ignore
+from airflow.sdk import Variable,Connection #type: ignore
 from airflow.operators.python import PythonOperator #type: ignore
 from airflow import DAG #type: ignore
 from datetime import datetime
+
+
+
 key_name = "teste_key_value"
 foo = Variable.get(key_name)
+
 def say_hello() -> None:
     print(f"Hello from Airflow! and reading the key {key_name} with value {foo}")
+    conn = Connection.get_connection("mysql_connection_info")
+    print("Host:", conn.host)
+    print("Login:", conn.login)
+    print("Password:", conn.password)
+    print("Schema:", conn.schema)
+    print("Port:", conn.port)
+    print("Extras:", conn.extra_dejson)
 
 with DAG(
     dag_id="spark_submit_dag",
