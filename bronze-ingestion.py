@@ -11,7 +11,7 @@ foo = Variable.get(key_name)
 
 def say_hello() -> None:
     print(f"Hello from Airflow! and reading the key {key_name} with value {foo}")
-    conn = Connection.get_connection("mysql_connection_info")
+    conn = Connection.get("mysql_connection_info")
     print("Host:", conn.host)
     print("Login:", conn.login)
     print("Password:", conn.password)
