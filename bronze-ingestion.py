@@ -14,7 +14,7 @@ def say_hello() -> None:
     conn = Connection.get("mysql_connection_info")
     print("Host:", conn.host)
     print("Login:", conn.login)
-    print("Password:", conn.password)
+    print("Password:", conn.password._value())
     print("Schema:", conn.schema)
     print("Port:", conn.port)
     print("Extras:", conn.extra_dejson)
