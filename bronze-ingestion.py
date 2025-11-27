@@ -1,11 +1,12 @@
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator #type: ignore
-
+from airflow.sdk import Variable #type: ignore
 from airflow.operators.python import PythonOperator #type: ignore
 from airflow import DAG #type: ignore
 from datetime import datetime
-
+key_name = "teste_key_value"
+foo = Variable.get(key_name)
 def say_hello() -> None:
-    print("Hello from Airflow!")
+    print(f"Hello from Airflow! and reading the key {key_name} with value {foo}")
 
 with DAG(
     dag_id="spark_submit_dag",
