@@ -42,25 +42,29 @@ with DAG(
     image='nauedu/nau-analytics-spark-shell:d465952',
     image_pull_policy='Always',
     # ✔ override entrypoint to run spark-submit
-    cmds=['spark-submit'],
+    cmds=["/bin/bash", "-c"],
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
-    "--master", "k8s://https://kubernetes.default.svc:443",
-    "--deploy-mode", "cluster",
-    "--name", "spark-pi",
-    "--conf", "spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements",
-    "--conf", "spark.kubernetes.namespace=analytics",
-    "--conf", "spark.kubernetes.authenticate.driver.serviceAccountName=spark-role",
-    "--conf", "spark.executor.instances=3",
-    "--conf", "spark.executor.cores=2",
-    "--conf", "spark.executor.memory=2g",
-    "--conf", "spark.kubernetes.submission.waitAppCompletion=true",
-    "--conf", "spark.kubernetes.submission.reportFailureOnDriverError=true",
-    "--conf", "spark.kubernetes.driver.deleteOnTermination=true",
-    "--conf", "spark.kubernetes.executor.deleteOnTermination=true",
-    "--conf", "spark.kubernetes.container.image.pullPolicy=Always",
-    "local:///opt/spark/work-dir/src/bronze/get_full_tables.py"
+        """
+            spark-submit \
+          --master k8s://https://kubernetes.default.svc:443 \
+          --deploy-mode cluster \
+          --name spark-pi \
+          --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
+          --conf spark.kubernetes.namespace=analytics \
+          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
+          --conf spark.executor.instances=3 \
+          --conf spark.executor.cores=2 \
+          --conf spark.executor.memory=2g \
+          --conf spark.kubernetes.submission.waitAppCompletion=true \
+          --conf spark.kubernetes.submission.reportFailureOnDriverError=true \
+          --conf spark.kubernetes.driver.deleteOnTermination=true \
+          --conf spark.kubernetes.executor.deleteOnTermination=true \
+          --conf spark.kubernetes.container.image.pullPolicy=Always \
+          local:///opt/spark/work-dir/src/misc/hello_spark.py \
+          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
+        """
     ],
     name='spark-submit-task',
     task_id='spark_submit_task',
