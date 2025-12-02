@@ -75,6 +75,7 @@ with DAG(
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=2g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
+          --conf spark.executorEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={port} \
