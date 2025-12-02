@@ -6,21 +6,21 @@ from datetime import datetime
 
 
 
-key_name = "teste_key_value"
-foo = Variable.get(key_name)
 
-def say_hello() -> None:
-    print(f"Hello from Airflow! and reading the key {key_name} with value {foo}")
-    conn = Connection.get("mysql_connection_info")
-    print("Host:", conn.host)
-    print("Login:", conn.login)
-    print("Password:", conn.password)
-    print("Password:", type(conn.password))
-    print("uri:", conn.get_uri())
-    print("Schema:", conn.schema)
-    print("Port:", conn.port)
-    print("Extras:", conn.extra_dejson)
 
+
+try:
+    savepath = Variable.get("save_path")
+    undesired_column = Variable.get("undesired_column")
+    database = Variable.get("mysqldatabase")
+    mysql_conn = Connection.get("mysql_connection_info")
+    user = mysql_conn.login
+    host = mysql_conn.host
+    secret = mysql_conn.password
+    port = mysql_conn.port
+except Exception:
+    print(Exception)    
+    raise Exception("Could not get the variables or secrets")
 with DAG(
     dag_id="spark_submit_dag",
     start_date=datetime(2023, 1, 1),
@@ -29,9 +29,26 @@ with DAG(
     tags=["example"],
 ) as dag:
 
-    hello_task = PythonOperator(
-        task_id="print_hello",
-        python_callable=say_hello,
+    echo_values = KubernetesPodOperator(
+    namespace='analytics',
+    service_account_name='spark-role',
+
+    # ✔ official spark image built for k8s
+    image='nauedu/nau-analytics-spark-shell:d465952',
+    image_pull_policy='Always',
+    # ✔ override entrypoint to run spark-submit
+    cmds=["/bin/bash", "-c"],
+
+    # ✔ submit a SparkPi example packaged inside the image
+    arguments=[
+        f"""
+        echo {database}  {user}  {host}  {secret}  {port}
+        """
+    ],
+    name='spark-submit-task',
+    task_id='spark_submit_task',
+    get_logs=True,
+    on_finish_action="keep_pod",
     )
 
     spark_submit_task = KubernetesPodOperator(
@@ -46,7 +63,7 @@ with DAG(
 
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
-        """
+        f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
@@ -58,11 +75,15 @@ with DAG(
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=2g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.kubernetes.submission.reportFailureOnDriverError=true \
+          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
+          --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \
+          --conf spark.kubernetes.driverEnv.MYSQL_PORT={port} \
+          --conf spark.kubernetes.driverEnv.MYSQL_USER={user} \
+          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={secret} \
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/misc/hello_spark.py \
+          local:///opt/spark/work-dir/src/bronze/get_full_tables.py \
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
     ],
@@ -74,4 +95,4 @@ with DAG(
 
 
     # Set dependency: first Python task, then KubernetesPodOperator
-    hello_task >> spark_submit_task
+    echo_values >> spark_submit_task #type: ignore
