@@ -18,6 +18,10 @@ try:
     host = mysql_conn.host
     secret = mysql_conn.password
     port = mysql_conn.port
+    s3_conn = Connection.get("s3_dev_connection")
+    S3_ACCESS_KEY = s3_conn.login
+    S3_SECRET_KEY = s3_conn.password
+    S3_ENDPOINT = Variable.get("s3endpoint")
 except Exception:
     print(Exception)    
     raise Exception("Could not get the variables or secrets")
@@ -75,12 +79,14 @@ with DAG(
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=2g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executorEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={port} \
           --conf spark.kubernetes.driverEnv.MYSQL_USER={user} \
           --conf spark.kubernetes.driverEnv.MYSQL_SECRET={secret} \
+          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={S3_ACCESS_KEY} \
+          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={S3_SECRET_KEY} \
+          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={S3_ENDPOINT} \
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
