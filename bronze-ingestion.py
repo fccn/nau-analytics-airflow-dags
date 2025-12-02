@@ -16,6 +16,7 @@ def say_hello() -> None:
     print("Login:", conn.login)
     print("Password:", conn.password)
     print("Password:", type(conn.password))
+    print("uri:", conn.get_uri())
     print("Schema:", conn.schema)
     print("Port:", conn.port)
     print("Extras:", conn.extra_dejson)
