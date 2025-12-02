@@ -46,7 +46,7 @@ with DAG(
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
         f"""
-        echo {database}  {user}  {host}  {secret}  {port}
+        echo {database}  {user}  {host}  {secret}  {port} {S3_ACCESS_KEY} {S3_ENDPOINT} {S3_SECRET_KEY}
         """
     ],
     name='echo_values',
