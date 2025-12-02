@@ -46,7 +46,7 @@ with DAG(
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
         f"""
-        echo {database}  {user}  {host}  {secret}  {port} {S3_ACCESS_KEY} {S3_ENDPOINT} {S3_SECRET_KEY}
+        echo {database}  {user}  {host}  {secret}  {port} {S3_ACCESS_KEY} {S3_ENDPOINT} {S3_SECRET_KEY} {savepath} {undesired_column}
         """
     ],
     name='echo_values',
@@ -90,7 +90,9 @@ with DAG(
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/get_full_tables.py --savepath {savepath} --undesired_column{undesired_column}\
+          local:///opt/spark/work-dir/src/bronze/get_full_tables.py\
+          --savepath {savepath}\
+          --undesired_column{undesired_column}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
     ],
