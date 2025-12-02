@@ -45,8 +45,8 @@ with DAG(
         echo {database}  {user}  {host}  {secret}  {port}
         """
     ],
-    name='spark-submit-task',
-    task_id='spark_submit_task',
+    name='echo_values',
+    task_id='echo_values',
     get_logs=True,
     on_finish_action="keep_pod",
     )
