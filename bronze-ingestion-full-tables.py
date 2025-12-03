@@ -103,4 +103,4 @@ with DAG(
 
 
     # Set dependency: first Python task, then KubernetesPodOperator
-    echo_values >> spark_submit_task  #type: ignore
+    echo_values >> spark_submit_task_full_tables  #type: ignore
