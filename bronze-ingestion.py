@@ -23,7 +23,6 @@ try:
     S3_SECRET_KEY = s3_conn.password
     S3_ENDPOINT = Variable.get("s3endpoint")
 except Exception:
-    print(Exception)    
     raise Exception("Could not get the variables or secrets")
 with DAG(
     dag_id="spark_submit_dag",
@@ -46,7 +45,7 @@ with DAG(
     # ✔ submit a SparkPi example packaged inside the image
     arguments=[
         f"""
-        echo {database}  {user}  {host}  {secret}  {port} {S3_ACCESS_KEY} {S3_ENDPOINT} {S3_SECRET_KEY} {savepath} {undesired_column}
+        echo {database} {savepath} {undesired_column}
         """
     ],
     name='echo_values',
