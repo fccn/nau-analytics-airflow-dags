@@ -25,7 +25,7 @@ try:
 except Exception:
     raise Exception("Could not get the variables or secrets")
 with DAG(
-    dag_id="spark_submit_dag",
+    dag_id="spark_submit-bronze-full-ingestion",
     start_date=datetime(2023, 1, 1),
     schedule="0 17 * * *",  # Run at 17:00 every day
     catchup=False,
