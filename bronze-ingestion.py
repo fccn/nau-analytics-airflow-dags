@@ -34,27 +34,6 @@ with DAG(
     tags=["example"],
 ) as dag:
 
-    echo_values = KubernetesPodOperator(
-    namespace='analytics',
-    service_account_name='spark-role',
-
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    image_pull_policy='Always',
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-        echo {database} {savepath} {undesired_column}
-        """
-    ],
-    name='echo_values',
-    task_id='echo_values',
-    get_logs=True,
-    on_finish_action="keep_pod",
-    )
 
     spark_submit_task_full_tables = KubernetesPodOperator(
     namespace='analytics',
@@ -118,7 +97,7 @@ with DAG(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name full-tables-ingestion \
+          --name incremental-table-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
@@ -153,5 +132,4 @@ with DAG(
 
 
     # Set dependency: first Python task, then KubernetesPodOperator
-    echo_values >> spark_submit_task_full_tables  #type: ignore
-    echo_values >> spark_submit_task_incremental_tables #type: ignore
+    spark_submit_task_full_tables >> spark_submit_task_incremental_tables #type: ignore
