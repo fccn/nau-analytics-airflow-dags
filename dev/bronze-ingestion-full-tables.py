@@ -31,29 +31,6 @@ with DAG(
     catchup=False,
     tags=["example"],
 ) as dag:
-
-    echo_values = KubernetesPodOperator(
-    namespace='analytics',
-    service_account_name='spark-role',
-
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    image_pull_policy='Always',
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-        echo {database} {savepath} {undesired_column}
-        """
-    ],
-    name='echo_values',
-    task_id='echo_values',
-    get_logs=True,
-    on_finish_action="keep_pod",
-    )
-
     spark_submit_task_full_tables = KubernetesPodOperator(
     namespace='analytics',
     service_account_name='spark-role',
@@ -103,4 +80,4 @@ with DAG(
 
 
     # Set dependency: first Python task, then KubernetesPodOperator
-    echo_values >> spark_submit_task_full_tables  #type: ignore
+    spark_submit_task_full_tables  #type: ignore

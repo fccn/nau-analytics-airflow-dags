@@ -49,7 +49,7 @@ with DAG(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name full-tables-ingestion \
+          --name incremental-tables-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
