@@ -13,15 +13,24 @@ try:
     savepath = Variable.get("save_path")
     undesired_column = Variable.get("undesired_column")
     database = Variable.get("mysqldatabase")
+    
     mysql_conn = Connection.get("mysql_connection_info")
     user = mysql_conn.login
     host = mysql_conn.host
     secret = mysql_conn.password
     port = mysql_conn.port
+    
     s3_conn = Connection.get("s3_dev_connection")
     S3_ACCESS_KEY = s3_conn.login
     S3_SECRET_KEY = s3_conn.password
-    S3_ENDPOINT = Variable.get("s3endpoint")
+    S3_ENDPOINT =s3_conn.extra_dejson.get("s3endpoint")
+    
+    iceberg_catalog_conn = Connection.get("iceberg_dev_connection")
+    ICEBERG_CATALOG_URI =iceberg_catalog_conn.extra_dejson.get("catalog_uri")
+    ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.ICEBERG_CATALOG_WAREHOUSE.get("bronze_catalog_endpoint")
+    ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
+    ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
+
 except Exception:
     raise Exception("Could not get the variables or secrets")
 with DAG(
@@ -63,6 +72,10 @@ with DAG(
           --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={S3_ACCESS_KEY} \
           --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={S3_SECRET_KEY} \
           --conf spark.kubernetes.driverEnv.S3_ENDPOINT={S3_ENDPOINT} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_URI={ICEBERG_CATALOG_URI} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={ICEBERG_CATALOG_USER} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={ICEBERG_CATALOG_PASSWORD} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_WAREHOUSE={ICEBERG_CATALOG_WAREHOUSE} \
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
