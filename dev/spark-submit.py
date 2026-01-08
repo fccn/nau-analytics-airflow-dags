@@ -37,7 +37,7 @@ with DAG(
     "--conf", "spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-using_base_image",
     "--conf", "spark.kubernetes.namespace=dev-nau-analytics",
     "--conf", "spark.kubernetes.authenticate.driver.serviceAccountName=spark-role",
-    "--conf", "spark.executor.instances=5",
+    "--conf", "spark.executor.instances=2",
     "--conf", "spark.executor.cores=2",
     "--conf", "spark.executor.memory=2g",
     "--conf", "spark.kubernetes.submission.waitAppCompletion=true",
