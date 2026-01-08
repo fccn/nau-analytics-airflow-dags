@@ -35,7 +35,7 @@ with DAG(
     "--deploy-mode", "cluster",
     "--name", "spark-pi",
     "--conf", "spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-using_base_image",
-    "--conf", "spark.kubernetes.namespace=analytics",
+    "--conf", "spark.kubernetes.namespace=dev-nau-analytics",
     "--conf", "spark.kubernetes.authenticate.driver.serviceAccountName=spark-role",
     "--conf", "spark.executor.instances=5",
     "--conf", "spark.executor.cores=2",
