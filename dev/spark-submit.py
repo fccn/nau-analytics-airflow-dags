@@ -21,7 +21,7 @@ with DAG(
     )
 
     spark_submit_task = KubernetesPodOperator(
-    namespace='analytics',
+    namespace='dev-nau-analytics',
     service_account_name='spark-role',
 
     # ✔ official spark image built for k8s
