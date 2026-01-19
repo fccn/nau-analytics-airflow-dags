@@ -5,7 +5,7 @@ from airflow.operators.python import PythonOperator
 
 
 def _hello():
-    print("### Hello from NAU Analytics DAG repo ###")
+    print("### Hello from NAU Analytics DAG repo in main branch###")
 
 
 with DAG(
