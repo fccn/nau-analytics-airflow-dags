@@ -5,7 +5,8 @@ from airflow.operators.python import PythonOperator
 
 
 def _hello():
-    print("### Hello from NAU Analytics DAG repo branch feat_spark_submit###")
+    import subprocess
+    print(subprocess.check_output(["git", "branch", "--show-current"]).decode())
 
 def _hellosub():
     import subprocess
