@@ -49,7 +49,7 @@ with DAG(
 
     # ✔ official spark image built for k8s
     image='nauedu/nau-analytics-spark-shell:d465952',
-    image_pull_policy='Always',
+    startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
 
