@@ -44,7 +44,7 @@ with DAG(
     tags=["example"],
 ) as dag:
     spark_submit_task_full_tables = KubernetesPodOperator(
-    namespace='analytics',
+    namespace='dev-nau-analytics',
     service_account_name='spark-role',
 
     # ✔ official spark image built for k8s
@@ -61,7 +61,7 @@ with DAG(
           --deploy-mode cluster \
           --name full-tables-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
-          --conf spark.kubernetes.namespace=analytics \
+          --conf spark.kubernetes.namespace=dev-nau-analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.executor.instances=1 \
           --conf spark.executor.cores=1 \
