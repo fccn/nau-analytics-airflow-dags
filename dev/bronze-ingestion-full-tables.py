@@ -29,7 +29,7 @@ try:
     iceberg_catalog_conn = Connection.get("iceberg_dev_connection")
     ICEBERG_CATALOG_HOST =iceberg_catalog_conn.host
     ICEBERG_CATALOG_PORT = iceberg_catalog_conn.port
-    ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get.get("bronze_iceberg_catalog_name")
+    ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
     ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
     ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
     ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
@@ -63,9 +63,9 @@ with DAG(
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.executor.instances=3 \
-          --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=2g \
+          --conf spark.executor.instances=1 \
+          --conf spark.executor.cores=1 \
+          --conf spark.executor.memory=512m \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \
@@ -84,7 +84,7 @@ with DAG(
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/get_full_tables.py\
+          local:///opt/spark/work-dir/src/bronze/python/get_full_tables.py\
           --undesired_column {undesired_column}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
