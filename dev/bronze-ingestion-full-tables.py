@@ -10,24 +10,27 @@ from datetime import datetime
 
 
 try:
-    savepath = Variable.get("save_path")
     undesired_column = Variable.get("undesired_column")
-    database = Variable.get("mysqldatabase")
+
     
-    mysql_conn = Connection.get("mysql_connection_info")
+    mysql_conn = Connection.get("sql_source_dev_connection")
     user = mysql_conn.login
     host = mysql_conn.host
     secret = mysql_conn.password
     port = mysql_conn.port
-    
+    database = mysql_conn.extra_dejson.get("mysqldatabase") 
+
+
     s3_conn = Connection.get("s3_dev_connection")
     S3_ACCESS_KEY = s3_conn.login
     S3_SECRET_KEY = s3_conn.password
     S3_ENDPOINT =s3_conn.extra_dejson.get("s3endpoint")
     
     iceberg_catalog_conn = Connection.get("iceberg_dev_connection")
-    ICEBERG_CATALOG_URI =iceberg_catalog_conn.extra_dejson.get("catalog_uri")
-    ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.ICEBERG_CATALOG_WAREHOUSE.get("bronze_catalog_endpoint")
+    ICEBERG_CATALOG_HOST =iceberg_catalog_conn.host
+    ICEBERG_CATALOG_PORT = iceberg_catalog_conn.port
+    ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get.get("bronze_iceberg_catalog_name")
+    ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
     ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
     ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
 
@@ -72,7 +75,9 @@ with DAG(
           --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={S3_ACCESS_KEY} \
           --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={S3_SECRET_KEY} \
           --conf spark.kubernetes.driverEnv.S3_ENDPOINT={S3_ENDPOINT} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_URI={ICEBERG_CATALOG_URI} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={ICEBERG_CATALOG_HOST} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={ICEBERG_CATALOG_PORT} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_NAME={ICEBERG_CATALOG_NAME} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={ICEBERG_CATALOG_USER} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={ICEBERG_CATALOG_PASSWORD} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_WAREHOUSE={ICEBERG_CATALOG_WAREHOUSE} \
@@ -80,7 +85,6 @@ with DAG(
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/bronze/get_full_tables.py\
-          --savepath {savepath}\
           --undesired_column {undesired_column}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
