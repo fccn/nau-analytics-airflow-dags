@@ -3,7 +3,7 @@ from airflow.sdk import Variable,Connection #type: ignore
 from airflow.operators.python import PythonOperator #type: ignore
 from airflow import DAG #type: ignore
 from datetime import datetime
-from urllib.parse import quote_plus
+import base64
 
 
 
@@ -33,7 +33,7 @@ try:
     ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
     ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
     ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
-    ICEBERG_CATALOG_PASSWORD = quote_plus(ICEBERG_CATALOG_PASSWORD)
+    ICEBERG_CATALOG_PASSWORD = base64.b64encode(ICEBERG_CATALOG_PASSWORD.encode()).decode()
 
 except Exception:
     raise Exception("Could not get the variables or secrets")
