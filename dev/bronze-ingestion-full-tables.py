@@ -31,8 +31,8 @@ try:
     ICEBERG_CATALOG_PORT = iceberg_catalog_conn.port
     ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
     ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
-    ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
-    ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
+    ICEBERG_CATALOG_USER = iceberg_catalog_conn.login.encode('utf-8')
+    ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password.encode('utf-8')
 
 except Exception:
     raise Exception("Could not get the variables or secrets")
