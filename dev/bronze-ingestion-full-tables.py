@@ -3,7 +3,7 @@ from airflow.sdk import Variable,Connection #type: ignore
 from airflow.operators.python import PythonOperator #type: ignore
 from airflow import DAG #type: ignore
 from datetime import datetime
-import base64
+
 
 
 
@@ -33,16 +33,15 @@ try:
     ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
     ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
     ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
-    ICEBERG_CATALOG_PASSWORD = base64.b64encode(ICEBERG_CATALOG_PASSWORD.encode()).decode()
 
 except Exception:
     raise Exception("Could not get the variables or secrets")
 with DAG(
     dag_id="spark_submit-bronze-full-ingestion",
     start_date=datetime(2023, 1, 1),
-    schedule=None,  # Run at 17:00 every day
+    schedule="0 8 * * *",  # Run at 17:00 every day
     catchup=False,
-    tags=["example"],
+    tags=["full_table_ingestion","dev"],
 ) as dag:
     spark_submit_task_full_tables = KubernetesPodOperator(
     namespace='dev-nau-analytics',
@@ -64,9 +63,9 @@ with DAG(
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=dev-nau-analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.executor.instances=1 \
+          --conf spark.executor.instances=3 \
           --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=512m \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \
