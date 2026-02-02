@@ -78,6 +78,12 @@ with DAG(
           --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={S3_ACCESS_KEY} \
           --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={S3_SECRET_KEY} \
           --conf spark.kubernetes.driverEnv.S3_ENDPOINT={S3_ENDPOINT} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={ICEBERG_CATALOG_HOST} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={ICEBERG_CATALOG_PORT} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_NAME={ICEBERG_CATALOG_NAME} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={ICEBERG_CATALOG_USER} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={ICEBERG_CATALOG_PASSWORD} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_WAREHOUSE={ICEBERG_CATALOG_WAREHOUSE} \
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
