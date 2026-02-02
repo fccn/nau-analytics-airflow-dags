@@ -81,7 +81,7 @@ with DAG(
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/incremental_load.py \
+          local:///opt/spark/work-dir/src/bronze/python/incremental_load.py \
           --metadatapath {metadatapath} \
           --table student_courseenrollment_history \
           --first_ingestion_flag {flag} \
