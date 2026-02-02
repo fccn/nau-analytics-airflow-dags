@@ -82,7 +82,7 @@ with DAG(
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/bronze/incremental_load.py \
-          --metadatapath {metadatapath}\
+          --metadatapath {metadatapath} \
           --table student_courseenrollment_history \
           --first_ingestion_flag {flag} \
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
