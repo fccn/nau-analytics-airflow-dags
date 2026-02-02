@@ -7,24 +7,37 @@ from datetime import datetime
 
 
 
-
-
 try:
-    savepath = Variable.get("save_path")
     metadatapath = Variable.get("metadata_path")
     flag = Variable.get("first_ingestion_flag")
-    database = Variable.get("mysqldatabase")
-    mysql_conn = Connection.get("mysql_connection_info")
+
+    
+    mysql_conn = Connection.get("sql_source_dev_connection")
     user = mysql_conn.login
     host = mysql_conn.host
     secret = mysql_conn.password
     port = mysql_conn.port
+    database = mysql_conn.extra_dejson.get("mysqldatabase") 
+
+
     s3_conn = Connection.get("s3_dev_connection")
     S3_ACCESS_KEY = s3_conn.login
     S3_SECRET_KEY = s3_conn.password
-    S3_ENDPOINT = Variable.get("s3endpoint")
+    S3_ENDPOINT =s3_conn.extra_dejson.get("s3endpoint")
+    
+    iceberg_catalog_conn = Connection.get("iceberg_dev_connection")
+    ICEBERG_CATALOG_HOST =iceberg_catalog_conn.host
+    ICEBERG_CATALOG_PORT = iceberg_catalog_conn.port
+    ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
+    ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
+    ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
+    ICEBERG_CATALOG_PASSWORD =iceberg_catalog_conn.password
+
 except Exception:
     raise Exception("Could not get the variables or secrets")
+
+
+
 with DAG(
     dag_id="spark_submit-incremental-ingestion",
     start_date=datetime(2023, 1, 1),
@@ -69,7 +82,6 @@ with DAG(
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/bronze/incremental_load.py \
-          --savepath {savepath}\
           --metadatapath {metadatapath}\
           --table student_courseenrollment_history \
           --first_ingestion_flag {flag} \
