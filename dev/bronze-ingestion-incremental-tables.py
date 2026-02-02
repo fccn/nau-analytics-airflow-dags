@@ -28,6 +28,7 @@ try:
     iceberg_catalog_conn = Connection.get("iceberg_dev_connection")
     ICEBERG_CATALOG_HOST =iceberg_catalog_conn.host
     ICEBERG_CATALOG_PORT = iceberg_catalog_conn.port
+    ICEBERG_DATABASE_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_database_catalog_name")
     ICEBERG_CATALOG_NAME = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
     ICEBERG_CATALOG_WAREHOUSE = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
     ICEBERG_CATALOG_USER = iceberg_catalog_conn.login
@@ -80,6 +81,7 @@ with DAG(
           --conf spark.kubernetes.driverEnv.S3_ENDPOINT={S3_ENDPOINT} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={ICEBERG_CATALOG_HOST} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={ICEBERG_CATALOG_PORT} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_DATABASE_CATALOG_NAME={ICEBERG_DATABASE_CATALOG_NAME} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_NAME={ICEBERG_CATALOG_NAME} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={ICEBERG_CATALOG_USER} \
           --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={ICEBERG_CATALOG_PASSWORD} \
