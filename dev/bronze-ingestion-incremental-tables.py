@@ -47,7 +47,7 @@ with DAG(
 ) as dag:
 
     spark_submit_task_incremental_tables = KubernetesPodOperator(
-    namespace='analytics',
+    namespace='dev-nau-analytics',
     service_account_name='spark-role',
 
     # ✔ official spark image built for k8s
@@ -64,11 +64,11 @@ with DAG(
           --deploy-mode cluster \
           --name incremental-tables-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
-          --conf spark.kubernetes.namespace=analytics \
+          --conf spark.kubernetes.namespace=dev-nau-analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.executor.instances=3 \
-          --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=2g \
+          --conf spark.executor.cores=1 \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={database} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={host} \

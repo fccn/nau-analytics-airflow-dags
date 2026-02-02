@@ -63,7 +63,7 @@ with DAG(
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=dev-nau-analytics \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.executor.instances=3 \
+          --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
