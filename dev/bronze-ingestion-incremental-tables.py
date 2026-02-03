@@ -44,7 +44,7 @@ with DAG(
     start_date=datetime(2023, 1, 1),
     schedule="30 8 * * *",  # Run at 17:00 every day
     catchup=False,
-    tags=["example"],
+    tags=["incremental_table_ingestion","dev"],
 ) as dag:
 
     spark_submit_task_incremental_tables = KubernetesPodOperator(
