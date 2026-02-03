@@ -42,7 +42,7 @@ except Exception:
 with DAG(
     dag_id="spark_submit-incremental-ingestion",
     start_date=datetime(2023, 1, 1),
-    schedule=None,  # Run at 17:00 every day
+    schedule="30 8 * * *",  # Run at 17:00 every day
     catchup=False,
     tags=["example"],
 ) as dag:
