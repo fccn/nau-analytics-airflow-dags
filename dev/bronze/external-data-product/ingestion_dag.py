@@ -73,7 +73,7 @@ with DAG(
           --deploy-mode cluster \
           --name bronze-tables-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
-          --conf spark.kubernetes.namespace=f{cfg["namespace"]} \
+          --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
