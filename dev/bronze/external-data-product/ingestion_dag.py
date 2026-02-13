@@ -1,7 +1,7 @@
 from airflow import DAG #type: ignore
 from datetime import datetime
-from .task_functions import spark_submit_task #type:ignore
-from .get_connection_info import get_connection_properties #type:ignore
+from task_functions import spark_submit_task #type:ignore
+from get_connection_info import get_connection_properties #type:ignore
 
 config_dict = get_connection_properties()
 spark_submit_task_1 = spark_submit_task(cfg = config_dict,
