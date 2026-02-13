@@ -72,7 +72,7 @@ with DAG(
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
           --name bronze-tables-ingestion \
-          --conf spark.kubernetes.container.image=f{cfg["docker_image"]} \
+          --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace=f{cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
