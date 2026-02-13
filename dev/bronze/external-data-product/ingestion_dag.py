@@ -44,7 +44,17 @@ def get_connection_properties()->dict:
     except Exception:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
-def spark_submit_task(cfg: dict,task_name:str,task_id:str,python_script:str) -> KubernetesPodOperator:
+
+
+cfg = get_connection_properties()
+
+with DAG(
+    dag_id="bronze_ingestion_dag",
+    start_date=datetime(2023, 1, 1),
+    schedule="0 3 * * *",  # Run at 17:00 every day
+    catchup=False,
+    tags=["bronze_table_ingestion","dev"],
+) as dag:
     spark_submit = KubernetesPodOperator(
     namespace=cfg["namespace"],
     service_account_name='spark-role',
@@ -93,28 +103,14 @@ def spark_submit_task(cfg: dict,task_name:str,task_id:str,python_script:str) -> 
           --conf spark.kubernetes.driver.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/{python_script}\
+          local:///opt/spark/work-dir/src/bronze/python/bronze_certificates_generatedcertificate_ingestion.py\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
     ],
-    name=task_name,
-    task_id=task_id,
+    name="certificates_generatedcertificate_ingestion",
+    task_id="certificates_generatedcertificate_ingestion_1",
     get_logs=True,
     on_finish_action="delete_pod",
     )
-    return spark_submit
-
-config_dict = get_connection_properties()
-spark_submit_task_1 = spark_submit_task(cfg = config_dict,
-                                        task_name="certificates_generatedcertificate_table_import",
-                                        task_id="certificates_generatedcertificate_table_import_v1",
-                                        python_script="bronze_certificates_generatedcertificate_ingestion.py")
-with DAG(
-    dag_id="bronze_ingestion_dag",
-    start_date=datetime(2023, 1, 1),
-    schedule="0 3 * * *",  # Run at 17:00 every day
-    catchup=False,
-    tags=["bronze_table_ingestion","dev"],
-) as dag:
-    spark_submit_task_1
-spark_submit_task_1
+    
+    spark_submit #type:ignore
