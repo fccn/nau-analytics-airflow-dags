@@ -232,9 +232,9 @@ default_args = {
 
 }
 
-bronze_dag =  DAG(dag_id="bronze_ingestion_dag",
+bronze_dag =  DAG(dag_id="bronze_ingestion_dag_2",
 default_args=default_args,
-schedule="0 4 * * *",  # Run at 3:00 every day
+schedule="0 4 * * *",  # Run at 4:00 every day
 tags=["bronze_table_ingestion","dev"],
 ) 
 
