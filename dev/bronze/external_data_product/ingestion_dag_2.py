@@ -305,4 +305,4 @@ student_courseenrollment_ingestion_task = student_courseenrollment_ingestion(cfg
 student_userattribute_ingestion_task = student_userattribute_ingestion(cfg=cfg)
 
 
-organizations_organization_ingestion_task >> student_courseaccessrole_ingestion_task >> student_courseenrollment_ingestion_task >>student_userattribute_ingestion #type: ignore
+organizations_organization_ingestion_task >> student_courseaccessrole_ingestion_task >> student_courseenrollment_ingestion_task >>student_userattribute_ingestion_task #type: ignore
