@@ -3,7 +3,7 @@ from datetime import datetime
 from airflow.sdk import Variable,Connection #type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator #type: ignore
 
-def student_courseenrollment_ingestion(cfg:dict) -> KubernetesPodOperator:
+def test_task_ingestion(cfg:dict) -> KubernetesPodOperator:
     return KubernetesPodOperator(
     namespace=cfg["namespace"],
     service_account_name='spark-role',
@@ -121,3 +121,6 @@ default_args=default_args,
 schedule=None,  # Run at 4:00 every day
 tags=["test_task_dag","dev"],
 ) 
+cfg = get_connection_properties(bronze_dag)
+test_dag_task = test_task_ingestion(cfg = cfg)
+test_dag_task
