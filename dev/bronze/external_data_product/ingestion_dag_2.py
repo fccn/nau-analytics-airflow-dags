@@ -27,6 +27,7 @@ def organizations_organization_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
@@ -84,6 +85,7 @@ def student_courseaccessrole_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -142,6 +144,7 @@ def student_userattribute_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -200,6 +203,7 @@ def student_courseenrollment_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -240,6 +244,7 @@ def get_connection_properties(dag: DAG)->dict:
     try:
         config = {}
         config["docker_image"] = Variable.get("docker_image")
+        config["ENVIRONMENT"] = Variable.get("ENVIRONMENT")
         config["dag"] = dag
         config["namespace"] = "dev-nau-analytics"
         
