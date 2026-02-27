@@ -116,11 +116,11 @@ default_args = {
 
 }
 
-bronze_dag =  DAG(dag_id="test_task_dag",
+test_bronze_dag =  DAG(dag_id="test_task_dag",
 default_args=default_args,
 schedule=None,  # Run at 4:00 every day
 tags=["test_task_dag","dev"],
 ) 
-cfg = get_connection_properties(bronze_dag)
+cfg = get_connection_properties(test_bronze_dag)
 test_dag_task = test_task_ingestion(cfg = cfg)
-test_dag_task
+test_dag_task ##type: ignore
