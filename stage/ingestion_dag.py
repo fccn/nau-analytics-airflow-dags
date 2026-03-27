@@ -17,7 +17,7 @@ def course_overviews_courseoverview_ingestion(cfg:dict) -> KubernetesPodOperator
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
+          --deploy-mode client \
           --name course_overviews_courseoverview-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
@@ -26,6 +26,7 @@ def course_overviews_courseoverview_ingestion(cfg:dict) -> KubernetesPodOperator
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -75,7 +76,7 @@ def certificates_generatedcertificate_ingestion(cfg:dict) -> KubernetesPodOperat
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
+          --deploy-mode client \
           --name certificates_generatedcertificate_ingestion-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
@@ -84,6 +85,7 @@ def certificates_generatedcertificate_ingestion(cfg:dict) -> KubernetesPodOperat
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -133,7 +135,7 @@ def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
+          --deploy-mode client \
           --name grades_persistentcoursegrade-ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
@@ -142,6 +144,7 @@ def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -216,6 +219,7 @@ def get_connection_properties(dag: DAG)->dict:
         config["GOLD_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_name")
         config["GOLD_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_warehouse")
         
+        config["ENVIRONMENT"] = Variable.get("ENVIRONMENT")
         return config
     except Exception:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
@@ -234,7 +238,7 @@ def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
+          --deploy-mode client \
           --name auth_user_ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
@@ -243,6 +247,7 @@ def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
@@ -292,7 +297,7 @@ def bronze_auth_userprofile_ingestion(cfg:dict) -> KubernetesPodOperator:
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
+          --deploy-mode client \
           --name bronze_auth_userprofile_ingestion \
           --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
@@ -301,6 +306,7 @@ def bronze_auth_userprofile_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
