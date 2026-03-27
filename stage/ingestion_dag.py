@@ -8,7 +8,7 @@ def course_overviews_courseoverview_ingestion(cfg:dict) -> KubernetesPodOperator
     namespace=cfg["namespace"],
     service_account_name='spark-role',
     # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
+    image='nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements',
     startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
