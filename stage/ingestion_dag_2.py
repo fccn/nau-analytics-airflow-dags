@@ -63,7 +63,7 @@ def organizations_organization_ingestion(cfg:dict) -> KubernetesPodOperator:
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
           --name organizations_organization-ingestion \
-          --conf spark.kubernetes.container.image=cfg["docker_image"] \
+          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
@@ -122,7 +122,7 @@ def student_courseaccessrole_ingestion(cfg:dict) -> KubernetesPodOperator:
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
           --name student_courseaccessrole-ingestion \
-          --conf spark.kubernetes.container.image=cfg["docker_image"] \
+          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
@@ -181,7 +181,7 @@ def student_userattribute_ingestion(cfg:dict) -> KubernetesPodOperator:
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
           --name student_userattribute-ingestion \
-          --conf spark.kubernetes.container.image=cfg["docker_image"] \
+          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
@@ -240,7 +240,7 @@ def student_courseenrollment_ingestion(cfg:dict) -> KubernetesPodOperator:
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
           --name student_courseenrollment-ingestion \
-          --conf spark.kubernetes.container.image=cfg["docker_image"] \
+          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
