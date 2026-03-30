@@ -194,6 +194,10 @@ def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
+          --conf spark.driver.host=course-overviews-courseoverview-ingestion-driver \
+          --conf spark.driver.port=7078 \
+          --conf spark.blockManager.port=7079 \
+          --conf spark.kubernetes.driver.service.name=course-overviews-courseoverview-ingestion-driver \
           local:///opt/spark/work-dir/src/bronze/python/bronze_grades_persistentcoursegrade_ingestion.py\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
         """
