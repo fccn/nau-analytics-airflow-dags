@@ -110,7 +110,7 @@ def certificates_generatedcertificate_ingestion(cfg:dict) -> KubernetesPodOperat
     namespace=cfg["namespace"],
     service_account_name='spark-role',
     # ✔ official spark image built for k8s
-    image={cfg['docker_image']},
+    image=cfg['docker_image'],
     startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
@@ -169,7 +169,7 @@ def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
     namespace=cfg["namespace"],
     service_account_name='spark-role',
     # ✔ official spark image built for k8s
-    image={cfg['docker_image']},
+    image=cfg['docker_image'],
     startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
@@ -230,7 +230,7 @@ def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
     namespace=cfg["namespace"],
     service_account_name='spark-role',
     # ✔ official spark image built for k8s
-    image={cfg['docker_image']},
+    image=cfg['docker_image'],
     startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
@@ -289,7 +289,7 @@ def bronze_auth_userprofile_ingestion(cfg:dict) -> KubernetesPodOperator:
     namespace=cfg["namespace"],
     service_account_name='spark-role',
     # ✔ official spark image built for k8s
-    image={cfg['docker_image']},
+    image=cfg['docker_image'],
     startup_timeout_seconds=600,
     # ✔ override entrypoint to run spark-submit
     cmds=["/bin/bash", "-c"],
