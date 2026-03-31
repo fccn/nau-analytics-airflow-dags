@@ -223,8 +223,6 @@ def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
     dag = cfg["dag"]
     )
 
-
-
 def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
     return KubernetesPodOperator(
     namespace=cfg["namespace"],
@@ -239,7 +237,7 @@ def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
         f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode client \
+          --deploy-mode cluster \
           --name auth_user_ingestion \
           --conf spark.kubernetes.container.image={cfg['docker_image']} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
