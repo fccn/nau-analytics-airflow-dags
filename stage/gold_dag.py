@@ -529,7 +529,7 @@ default_args = {
 
 gold_dag =  DAG(dag_id="gold_dag",
 default_args=default_args,
-schedule="0 3 * * *",  # Run at 3:00 every day
+schedule="0 5 * * *",  # Run at 5:00 every day
 tags=["gold_table_transform","stage"],
 ) 
 

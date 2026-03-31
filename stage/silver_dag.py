@@ -589,7 +589,7 @@ default_args = {
 
 bronze_dag =  DAG(dag_id="silver_dag",
 default_args=default_args,
-schedule="0 3 * * *",  # Run at 3:00 every day
+schedule="0 4 * * *",  # Run at 4:00 every day
 tags=["silver_table_clean","stage"],
 ) 
 
