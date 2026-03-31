@@ -671,4 +671,4 @@ student_userattribute_ingestion_task = student_userattribute_ingestion(cfg=cfg)
 
 organizations_ho_ingestion_task = organizations_ho_ingestion(cfg=cfg)
 
-course_overviews_courseoverview_ingestion_task >> certificates_generatedcertificate_ingestion_task >> grades_persistentcoursegrade_ingestion_task >> auth_user_ingestion_task >> auth_userprofile_ingestion_task >> organizations_organization_ingestion_task >> student_courseaccessrole_ingestion_task >> student_courseenrollment_ingestion_task >> student_userattribute_ingestion_task >> student_userattribute_ingestion_task #type: ignore
+course_overviews_courseoverview_ingestion_task >> certificates_generatedcertificate_ingestion_task >> grades_persistentcoursegrade_ingestion_task >> auth_user_ingestion_task >> auth_userprofile_ingestion_task >> organizations_organization_ingestion_task >> student_courseaccessrole_ingestion_task >> student_courseenrollment_ingestion_task >> student_userattribute_ingestion_task >> organizations_ho_ingestion_task #type: ignore
