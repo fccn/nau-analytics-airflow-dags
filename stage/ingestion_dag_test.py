@@ -121,28 +121,60 @@ def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
           local:///opt/spark/work-dir/src/bronze/python/{script_path} &
 
         SUBMIT_PID=$!
+        echo "[watcher] spark-submit running as PID $SUBMIT_PID"
 
-        echo "[ttl-patcher] Waiting for driver pod to appear..."
-        python3 -c "
-import time
+        python3 - <<'PYEOF' &
+import time, sys
 from kubernetes import client, config as k8s_config
+
 k8s_config.load_incluster_config()
 v1 = client.CoreV1Api()
-for _ in range(60):
-    pods = v1.list_namespaced_pod('{cfg['namespace']}', label_selector='spark-app-name={app_name}')
+namespace = "{cfg['namespace']}"
+label = "spark-app-name={app_name}"
+
+print("[watcher] waiting for driver pod...")
+pod_name = None
+for _ in range(120):
+    pods = v1.list_namespaced_pod(namespace, label_selector=label)
     if pods.items:
         pod_name = pods.items[0].metadata.name
-        print(f'[ttl-patcher] Found driver pod: {{pod_name}}, patching ttlSecondsAfterFinished=30')
-        v1.patch_namespaced_pod(pod_name, '{cfg['namespace']}', {{'spec': {{'ttlSecondsAfterFinished': 30}}}})
-        print('[ttl-patcher] Patched successfully')
+        print(f"[watcher] found driver pod: {{pod_name}}")
         break
     time.sleep(2)
-else:
-    print('[ttl-patcher] WARNING: driver pod never found, skipping patch')
-" 2>&1 &
+
+if not pod_name:
+    print("[watcher] driver pod never appeared, giving up")
+    sys.exit(0)
+
+print("[watcher] watching for Succeeded/Failed...")
+for _ in range(1200):
+    try:
+        pod = v1.read_namespaced_pod(pod_name, namespace)
+        phase = pod.status.phase
+        print(f"[watcher] phase: {{phase}}")
+        if phase in ("Succeeded", "Failed"):
+            print(f"[watcher] deleting {{pod_name}}...")
+            v1.delete_namespaced_pod(
+                pod_name, namespace,
+                body=client.V1DeleteOptions(grace_period_seconds=0)
+            )
+            print("[watcher] deleted successfully")
+            break
+    except Exception as e:
+        print(f"[watcher] error: {{e}}")
+        break
+    time.sleep(3)
+PYEOF
+
+        WATCHER_PID=$!
+        echo "[watcher] watcher running as PID $WATCHER_PID"
 
         wait $SUBMIT_PID
-        exit $?
+        SPARK_RC=$?
+        echo "[watcher] spark-submit exited with $SPARK_RC"
+        wait $WATCHER_PID
+        echo "[watcher] watcher done"
+        exit $SPARK_RC
     """
 
 def make_spark_task(
