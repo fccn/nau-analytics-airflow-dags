@@ -2,56 +2,34 @@ from airflow import DAG
 from datetime import datetime
 from airflow.sdk import Variable, Connection
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+from kubernetes import client, config as k8s_config  # type: ignore
 
 
-def get_connection_properties(dag: DAG) -> dict:
-    try:
-        config = {}
-        config["docker_image"] = Variable.get("docker_image")
-        config["dag"] = dag
-        config["namespace"] = Variable.get("namespace")
-
-        mysql_conn = Connection.get("sql_source_stage_connection")
-        config["database"] = mysql_conn.extra_dejson.get("mysqldatabase")
-        config["host"] = mysql_conn.host
-        config["user"] = mysql_conn.login
-        config["port"] = mysql_conn.port
-        config["secret"] = mysql_conn.password
-
-        s3_conn = Connection.get("s3_stage_connection")
-        config["S3_ACCESS_KEY"] = s3_conn.login
-        config["S3_SECRET_KEY"] = s3_conn.password
-        config["S3_ENDPOINT"] = s3_conn.extra_dejson.get("s3endpoint")
-
-        iceberg_catalog_conn = Connection.get("iceberg_stage_connection")
-        config["ICEBERG_CATALOG_HOST"] = iceberg_catalog_conn.host
-        config["ICEBERG_CATALOG_PORT"] = iceberg_catalog_conn.port
-        config["ICEBERG_CATALOG_USER"] = iceberg_catalog_conn.login
-        config["ICEBERG_CATALOG_PASSWORD"] = iceberg_catalog_conn.password
-
-        config["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_database_catalog_name")
-        config["BRONZE_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
-        config["BRONZE_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
-
-        config["SILVER_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_database_catalog_name")
-        config["SILVER_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_catalog_name")
-        config["SILVER_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_catalog_warehouse")
-
-        config["GOLD_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_database_catalog_name")
-        config["GOLD_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_name")
-        config["GOLD_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_warehouse")
-
-        config["ENVIRONMENT"] = Variable.get("ENVIRONMENT")
-        return config
-    except Exception:
-        raise Exception(f"Could not get the variables or secrets: {Exception}")
+def delete_spark_driver_pod(app_name: str, namespace: str):
+    """Returns a callback that deletes the Spark driver pod by app label."""
+    def callback(context):
+        try:
+            k8s_config.load_incluster_config()  # running inside k8s (Airflow pod)
+            v1 = client.CoreV1Api()
+            pods = v1.list_namespaced_pod(
+                namespace=namespace,
+                label_selector=f"spark-app-name={app_name}"
+            )
+            for pod in pods.items:
+                pod_name = pod.metadata.name
+                phase = pod.status.phase
+                print(f"[cleanup] Deleting driver pod {pod_name} (phase: {phase})")
+                v1.delete_namespaced_pod(
+                    name=pod_name,
+                    namespace=namespace,
+                    body=client.V1DeleteOptions(grace_period_seconds=0)
+                )
+        except Exception as e:
+            print(f"[cleanup] Warning: could not delete driver pod for {app_name}: {e}")
+    return callback
 
 
 def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
-    """
-    Builds the full spark-submit bash command.
-    All shared confs live here — including driver pod deletion.
-    """
     return f"""
         spark-submit \\
           --master k8s://https://kubernetes.default.svc:443 \\
@@ -87,7 +65,6 @@ def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg['GOLD_ICEBERG_CATALOG_NAME']} \\
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg['GOLD_ICEBERG_CATALOG_WAREHOUSE']} \\
           --conf spark.kubernetes.driver.deleteOnTermination=true \\
-          --conf spark.kubernetes.appKillPodDeletionGracePeriod=0 \\
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \\
           --conf spark.kubernetes.executor.deleteOnTermination=true \\
           --conf spark.kubernetes.container.image.pullPolicy=Always \\
@@ -103,6 +80,7 @@ def make_spark_task(
     pod_name: str,
     script_path: str,
 ) -> KubernetesPodOperator:
+    cleanup = delete_spark_driver_pod(app_name, cfg["namespace"])
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
         service_account_name="spark-role",
@@ -114,6 +92,8 @@ def make_spark_task(
         task_id=task_id,
         get_logs=True,
         on_finish_action="delete_pod",
+        on_success_callback=cleanup,
+        on_failure_callback=cleanup,
         dag=cfg["dag"],
     )
 
@@ -130,24 +110,23 @@ bronze_dag_test = DAG(
     dag_id="bronze_dag_ing_test",
     default_args=default_args,
     schedule="0 3 * * *",
-    tags=["bronze_table_ingestion_test", "stage"],
+    tags=["bronze_table_ingestion", "stage"],
 )
 
 cfg = get_connection_properties(bronze_dag_test)
 
-# Define all tasks using the shared factory
 tasks = [
-    ("course_overviews_courseoverview-ingestion",          "course_overviews_courseoverview_ingestion_1",          "course_overviews_courseoverview_ingestion",          "bronze_course_overviews_courseoverview_ingestion.py"),
-    ("certificates_generatedcertificate_ingestion",        "certificates_generatedcertificate_ingestion_1",        "certificates_generatedcertificate_ingestion",        "bronze_certificates_generatedcertificate_ingestion.py"),
-    ("grades_persistentcoursegrade-ingestion",             "grades_persistentcoursegrade_ingestion_1",             "grades_persistentcoursegrade_ingestion",             "bronze_grades_persistentcoursegrade_ingestion.py"),
-    ("auth_user_ingestion",                                "auth_user_ingestion_1",                                "auth_user_ingestion",                                "bronze_auth_user_ingestion.py"),
-    ("bronze_auth_userprofile_ingestion",                  "auth_userprofile_ingestion_1",                         "auth_userprofile_ingestion",                         "bronze_auth_userprofile_ingestion.py"),
-    ("organizations_organization-ingestion",               "organizations_organization_ingestion_1",               "organizations_organization_ingestion",               "bronze_organizations_organization_ingestion.py"),
-    ("student_courseaccessrole-ingestion",                 "student_courseaccessrole_ingestion_1",                 "student_courseaccessrole_ingestion",                 "bronze_student_courseaccessrole_ingestion.py"),
-    ("student_courseenrollment-ingestion",                 "student_courseenrollment_ingestion_1",                 "student_courseenrollment_ingestion",                 "bronze_student_courseenrollment_ingestion.py"),
-    ("student_userattribute-ingestion",                    "student_userattribute_ingestion_1",                    "student_userattribute_ingestion",                    "bronze_student_userattribute_ingestion.py"),
-    ("organizations_ho_ingestion",                         "organizations_ho_ingestion_1",                         "organizations_ho_ingestion",                         "bronze_organizations_ho_ingestion.py"),
-    ("student_courseenrollment_history_ingestion",         "student_courseenrollment_history_ingestion_1",         "student_courseenrollment_history_ingestion",         "bronze_student_courseenrollment_history_ingestion.py"),
+    ("course_overviews_courseoverview-ingestion",       "course_overviews_courseoverview_ingestion_1",       "course_overviews_courseoverview_ingestion",       "bronze_course_overviews_courseoverview_ingestion.py"),
+    ("certificates_generatedcertificate_ingestion",     "certificates_generatedcertificate_ingestion_1",     "certificates_generatedcertificate_ingestion",     "bronze_certificates_generatedcertificate_ingestion.py"),
+    ("grades_persistentcoursegrade-ingestion",          "grades_persistentcoursegrade_ingestion_1",          "grades_persistentcoursegrade_ingestion",          "bronze_grades_persistentcoursegrade_ingestion.py"),
+    ("auth_user_ingestion",                             "auth_user_ingestion_1",                             "auth_user_ingestion",                             "bronze_auth_user_ingestion.py"),
+    ("bronze_auth_userprofile_ingestion",               "auth_userprofile_ingestion_1",                      "auth_userprofile_ingestion",                      "bronze_auth_userprofile_ingestion.py"),
+    ("organizations_organization-ingestion",            "organizations_organization_ingestion_1",            "organizations_organization_ingestion",            "bronze_organizations_organization_ingestion.py"),
+    ("student_courseaccessrole-ingestion",              "student_courseaccessrole_ingestion_1",              "student_courseaccessrole_ingestion",              "bronze_student_courseaccessrole_ingestion.py"),
+    ("student_courseenrollment-ingestion",              "student_courseenrollment_ingestion_1",              "student_courseenrollment_ingestion",              "bronze_student_courseenrollment_ingestion.py"),
+    ("student_userattribute-ingestion",                 "student_userattribute_ingestion_1",                 "student_userattribute_ingestion",                 "bronze_student_userattribute_ingestion.py"),
+    ("organizations_ho_ingestion",                      "organizations_ho_ingestion_1",                      "organizations_ho_ingestion",                      "bronze_organizations_ho_ingestion.py"),
+    ("student_courseenrollment_history_ingestion",      "student_courseenrollment_history_ingestion_1",      "student_courseenrollment_history_ingestion",      "bronze_student_courseenrollment_history_ingestion.py"),
 ]
 
 task_objects = [
@@ -155,6 +134,5 @@ task_objects = [
     for app_name, task_id, pod_name, script in tasks
 ]
 
-# Chain tasks sequentially (same order as before)
 for i in range(len(task_objects) - 1):
     task_objects[i] >> task_objects[i + 1]  # type: ignore
