@@ -126,14 +126,14 @@ default_args = {
     "email_on_retry": False,
 }
 
-bronze_dag = DAG(
-    dag_id="bronze_ingestion_dag",
+bronze_dag_test = DAG(
+    dag_id="bronze_dag_ing_test",
     default_args=default_args,
     schedule="0 3 * * *",
-    tags=["bronze_table_ingestion", "stage"],
+    tags=["bronze_table_ingestion_test", "stage"],
 )
 
-cfg = get_connection_properties(bronze_dag)
+cfg = get_connection_properties(bronze_dag_test)
 
 # Define all tasks using the shared factory
 tasks = [
