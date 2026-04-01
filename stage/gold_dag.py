@@ -66,7 +66,7 @@ def dim_course_edition(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -125,7 +125,7 @@ def dim_organization(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -184,7 +184,7 @@ def dim_time(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -243,7 +243,7 @@ def dim_user(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -302,7 +302,7 @@ def fact_certificate_d(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
            --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -361,7 +361,7 @@ def fact_course_edition_daily(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
@@ -420,7 +420,7 @@ def fact_course_enrollment_daily(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
@@ -479,7 +479,7 @@ def fact_student_grades(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=2 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
