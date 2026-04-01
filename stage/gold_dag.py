@@ -68,7 +68,7 @@ def dim_course_edition(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -127,7 +127,7 @@ def dim_organization(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -245,7 +245,7 @@ def dim_user(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -304,7 +304,7 @@ def fact_certificate_d(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
            --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -363,7 +363,7 @@ def fact_course_edition_daily(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -422,7 +422,7 @@ def fact_course_enrollment_daily(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
@@ -481,7 +481,7 @@ def fact_student_grades(cfg:dict) -> KubernetesPodOperator:
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores=2 \
-          --conf spark.executor.memory=16g \
+          --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
