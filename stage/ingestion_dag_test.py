@@ -82,6 +82,8 @@ def delete_spark_driver_pod(app_name: str, namespace: str):
 
 def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
     return f"""
+        set -o pipefail
+
         spark-submit \\
           --master k8s://https://kubernetes.default.svc:443 \\
           --deploy-mode cluster \\
@@ -115,12 +117,25 @@ def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg['GOLD_ICEBERG_DATABASE_CATALOG_NAME']} \\
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg['GOLD_ICEBERG_CATALOG_NAME']} \\
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg['GOLD_ICEBERG_CATALOG_WAREHOUSE']} \\
-          --conf spark.kubernetes.driver.deleteOnTermination=true \\
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \\
           --conf spark.kubernetes.executor.deleteOnTermination=true \\
           --conf spark.kubernetes.container.image.pullPolicy=Always \\
           local:///opt/spark/work-dir/src/bronze/python/{script_path} \\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
+          2>&1 | tee log.txt
+
+        SPARK_EXIT=${{PIPESTATUS[0]}}
+        LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//')
+        echo "spark-submit exit: $SPARK_EXIT, parsed driver exit: $LAST_EXIT"
+
+        echo "[cleanup] Deleting driver pod with label spark-app-name={app_name} in namespace {cfg['namespace']}"
+        kubectl delete pod \\
+          -n {cfg['namespace']} \\
+          -l spark-app-name={app_name} \\
+          --grace-period=0 \\
+          --force \\
+          --ignore-not-found=true && echo "[cleanup] Driver pod deleted" || echo "[cleanup] WARNING: kubectl delete failed"
+
+        exit "${{LAST_EXIT:-$SPARK_EXIT}}"
     """
 
 
