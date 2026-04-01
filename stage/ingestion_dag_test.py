@@ -82,8 +82,6 @@ def delete_spark_driver_pod(app_name: str, namespace: str):
 
 def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
     return f"""
-        set -o pipefail
-
         spark-submit \\
           --master k8s://https://kubernetes.default.svc:443 \\
           --deploy-mode cluster \\
@@ -125,17 +123,24 @@ def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
 
         SPARK_EXIT=${{PIPESTATUS[0]}}
         LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//')
+        FINAL_EXIT="${{LAST_EXIT:-$SPARK_EXIT}}"
         echo "spark-submit exit: $SPARK_EXIT, parsed driver exit: $LAST_EXIT"
 
-        echo "[cleanup] Deleting driver pod with label spark-app-name={app_name} in namespace {cfg['namespace']}"
-        kubectl delete pod \\
-          -n {cfg['namespace']} \\
-          -l spark-app-name={app_name} \\
-          --grace-period=0 \\
-          --force \\
-          --ignore-not-found=true && echo "[cleanup] Driver pod deleted" || echo "[cleanup] WARNING: kubectl delete failed"
-
-        exit "${{LAST_EXIT:-$SPARK_EXIT}}"
+        echo "[cleanup] Deleting driver pods with spark-app-name={app_name} in {cfg['namespace']}"
+        python3 -c "
+from kubernetes import client, config as k8s_config
+k8s_config.load_incluster_config()
+v1 = client.CoreV1Api()
+pods = v1.list_namespaced_pod('{cfg['namespace']}', label_selector='spark-app-name={app_name}')
+if not pods.items:
+    print('[cleanup] No driver pods found')
+for pod in pods.items:
+    print(f'[cleanup] Deleting pod: {{pod.metadata.name}} phase: {{pod.status.phase}}')
+    v1.delete_namespaced_pod(pod.metadata.name, '{cfg['namespace']}', body=client.V1DeleteOptions(grace_period_seconds=0))
+    print(f'[cleanup] Deleted: {{pod.metadata.name}}')
+"
+        echo "[cleanup] Done. Exiting with code $FINAL_EXIT"
+        exit "$FINAL_EXIT"
     """
 
 
