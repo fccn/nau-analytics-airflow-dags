@@ -82,67 +82,68 @@ def delete_spark_driver_pod(app_name: str, namespace: str):
 
 def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
     return f"""
-        spark-submit \\
-          --master k8s://https://kubernetes.default.svc:443 \\
-          --deploy-mode cluster \\
-          --name {app_name} \\
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \\
-          --conf spark.kubernetes.namespace={cfg['namespace']} \\
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \\
-          --conf spark.kubernetes.submission.waitAppCompletion=true \\
-          --conf spark.executor.instances=2 \\
-          --conf spark.executor.cores=1 \\
-          --conf spark.executor.memory=8g \\
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg['ENVIRONMENT']} \\
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg['database']} \\
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg['host']} \\
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg['port']} \\
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg['user']} \\
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg['secret']} \\
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg['S3_ACCESS_KEY']} \\
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg['S3_SECRET_KEY']} \\
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg['S3_ENDPOINT']} \\
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg['ICEBERG_CATALOG_HOST']} \\
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg['ICEBERG_CATALOG_PORT']} \\
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg['ICEBERG_CATALOG_USER']} \\
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg['ICEBERG_CATALOG_PASSWORD']} \\
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg['BRONZE_ICEBERG_DATABASE_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg['BRONZE_ICEBERG_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg['BRONZE_ICEBERG_CATALOG_WAREHOUSE']} \\
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg['SILVER_ICEBERG_DATABASE_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg['SILVER_ICEBERG_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg['SILVER_ICEBERG_CATALOG_WAREHOUSE']} \\
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg['GOLD_ICEBERG_DATABASE_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg['GOLD_ICEBERG_CATALOG_NAME']} \\
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg['GOLD_ICEBERG_CATALOG_WAREHOUSE']} \\
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \\
-          --conf spark.kubernetes.executor.deleteOnTermination=true \\
-          --conf spark.kubernetes.container.image.pullPolicy=Always \\
-          local:///opt/spark/work-dir/src/bronze/python/{script_path} \\
-          2>&1 | tee log.txt
+        spark-submit \
+          --master k8s://https://kubernetes.default.svc:443 \
+          --deploy-mode cluster \
+          --name {app_name} \
+          --conf spark.kubernetes.container.image={cfg['docker_image']} \
+          --conf spark.kubernetes.namespace={cfg['namespace']} \
+          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
+          --conf spark.kubernetes.submission.waitAppCompletion=true \
+          --conf spark.executor.instances=2 \
+          --conf spark.executor.cores=1 \
+          --conf spark.executor.memory=8g \
+          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg['ENVIRONMENT']} \
+          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg['database']} \
+          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg['host']} \
+          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg['port']} \
+          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg['user']} \
+          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg['secret']} \
+          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg['S3_ACCESS_KEY']} \
+          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg['S3_SECRET_KEY']} \
+          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg['S3_ENDPOINT']} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg['ICEBERG_CATALOG_HOST']} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg['ICEBERG_CATALOG_PORT']} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg['ICEBERG_CATALOG_USER']} \
+          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg['ICEBERG_CATALOG_PASSWORD']} \
+          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg['BRONZE_ICEBERG_DATABASE_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg['BRONZE_ICEBERG_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg['BRONZE_ICEBERG_CATALOG_WAREHOUSE']} \
+          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg['SILVER_ICEBERG_DATABASE_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg['SILVER_ICEBERG_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg['SILVER_ICEBERG_CATALOG_WAREHOUSE']} \
+          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg['GOLD_ICEBERG_DATABASE_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg['GOLD_ICEBERG_CATALOG_NAME']} \
+          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg['GOLD_ICEBERG_CATALOG_WAREHOUSE']} \
+          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+          --conf spark.kubernetes.executor.deleteOnTermination=true \
+          --conf spark.kubernetes.container.image.pullPolicy=Always \
+          local:///opt/spark/work-dir/src/bronze/python/{script_path} &
 
-        SPARK_EXIT=${{PIPESTATUS[0]}}
-        LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//')
-        FINAL_EXIT="${{LAST_EXIT:-$SPARK_EXIT}}"
-        echo "spark-submit exit: $SPARK_EXIT, parsed driver exit: $LAST_EXIT"
+        SUBMIT_PID=$!
 
-        echo "[cleanup] Deleting driver pods with spark-app-name={app_name} in {cfg['namespace']}"
+        echo "[ttl-patcher] Waiting for driver pod to appear..."
         python3 -c "
+import time
 from kubernetes import client, config as k8s_config
 k8s_config.load_incluster_config()
 v1 = client.CoreV1Api()
-pods = v1.list_namespaced_pod('{cfg['namespace']}', label_selector='spark-app-name={app_name}')
-if not pods.items:
-    print('[cleanup] No driver pods found')
-for pod in pods.items:
-    print(f'[cleanup] Deleting pod: {{pod.metadata.name}} phase: {{pod.status.phase}}')
-    v1.delete_namespaced_pod(pod.metadata.name, '{cfg['namespace']}', body=client.V1DeleteOptions(grace_period_seconds=0))
-    print(f'[cleanup] Deleted: {{pod.metadata.name}}')
-"
-        echo "[cleanup] Done. Exiting with code $FINAL_EXIT"
-        exit "$FINAL_EXIT"
-    """
+for _ in range(60):
+    pods = v1.list_namespaced_pod('{cfg['namespace']}', label_selector='spark-app-name={app_name}')
+    if pods.items:
+        pod_name = pods.items[0].metadata.name
+        print(f'[ttl-patcher] Found driver pod: {{pod_name}}, patching ttlSecondsAfterFinished=30')
+        v1.patch_namespaced_pod(pod_name, '{cfg['namespace']}', {{'spec': {{'ttlSecondsAfterFinished': 30}}}})
+        print('[ttl-patcher] Patched successfully')
+        break
+    time.sleep(2)
+else:
+    print('[ttl-patcher] WARNING: driver pod never found, skipping patch')
+" 2>&1 &
 
+        wait $SUBMIT_PID
+        exit $?
+    """
 
 def make_spark_task(
     cfg: dict,
