@@ -47,26 +47,36 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 def delete_spark_driver_pod(app_name: str, namespace: str):
-    """Returns a callback that deletes the Spark driver pod by app label."""
     def callback(context):
         try:
-            k8s_config.load_incluster_config()  # running inside k8s (Airflow pod)
+            k8s_config.load_incluster_config()
             v1 = client.CoreV1Api()
-            pods = v1.list_namespaced_pod(
-                namespace=namespace,
-                label_selector=f"spark-app-name={app_name}"
-            )
+
+            # List ALL pods and log them so we can see what labels exist
+            all_pods = v1.list_namespaced_pod(namespace=namespace)
+            print(f"[cleanup] All pods in namespace '{namespace}':")
+            for pod in all_pods.items:
+                print(f"  - {pod.metadata.name} | phase: {pod.status.phase} | labels: {pod.metadata.labels}")
+
+            # Try the label we think is correct
+            label_selector = f"spark-app-name={app_name}"
+            print(f"[cleanup] Searching with label_selector: '{label_selector}'")
+            pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
+            print(f"[cleanup] Found {len(pods.items)} pod(s) matching label")
+
             for pod in pods.items:
-                pod_name = pod.metadata.name
-                phase = pod.status.phase
-                print(f"[cleanup] Deleting driver pod {pod_name} (phase: {phase})")
+                print(f"[cleanup] Deleting: {pod.metadata.name} (phase: {pod.status.phase})")
                 v1.delete_namespaced_pod(
-                    name=pod_name,
+                    name=pod.metadata.name,
                     namespace=namespace,
                     body=client.V1DeleteOptions(grace_period_seconds=0)
                 )
+                print(f"[cleanup] Deleted: {pod.metadata.name}")
+
         except Exception as e:
-            print(f"[cleanup] Warning: could not delete driver pod for {app_name}: {e}")
+            import traceback
+            print(f"[cleanup] ERROR: {e}")
+            print(traceback.format_exc())
     return callback
 
 
