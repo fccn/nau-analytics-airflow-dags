@@ -58,24 +58,25 @@ def make_driver_cleanup_task(app_name: str, namespace: str, dag: DAG, task_id: s
         import time
         k8s_config.load_incluster_config()
         v1 = client.CoreV1Api()
-        label = f"spark-app-name={app_name}"
-        print(f"[cleanup] looking for completed driver pod: {label}")
-        for attempt in range(20):
-            pods = v1.list_namespaced_pod(namespace, label_selector=label)
-            print(f"[cleanup] attempt {attempt+1}/20: found {len(pods.items)} pod(s)")
-            for pod in pods.items:
-                phase = pod.status.phase
-                print(f"[cleanup] pod={pod.metadata.name} phase={phase}")
-                if phase in ("Succeeded", "Failed"):
-                    v1.delete_namespaced_pod(
-                        pod.metadata.name,
-                        namespace,
-                        body=client.V1DeleteOptions(grace_period_seconds=0),
-                    )
-                    print(f"[cleanup] deleted {pod.metadata.name}")
-                    return
-            time.sleep(5)
-        print("[cleanup] no completed driver pod found after all retries, giving up")
+        
+        # Debug: print which namespace we're searching and list ALL pods there
+        print(f"[cleanup] searching namespace: '{namespace}'")
+        try:
+            all_pods = v1.list_namespaced_pod(namespace)
+            print(f"[cleanup] total pods in namespace: {len(all_pods.items)}")
+            for pod in all_pods.items:
+                print(f"[cleanup]   {pod.metadata.name} | {pod.status.phase} | labels: {pod.metadata.labels}")
+        except Exception as e:
+            print(f"[cleanup] ERROR listing pods: {e}")
+            # Try listing across ALL namespaces to confirm connectivity
+            try:
+                all_pods = v1.list_pod_for_all_namespaces()
+                print(f"[cleanup] total pods cluster-wide: {len(all_pods.items)}")
+                for pod in all_pods.items:
+                    if "driver" in pod.metadata.name:
+                        print(f"[cleanup] driver pod found in ns={pod.metadata.namespace}: {pod.metadata.name}")
+            except Exception as e2:
+                print(f"[cleanup] ERROR listing all pods: {e2}")
 
     return PythonOperator(
         task_id=task_id,
