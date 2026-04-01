@@ -2,7 +2,9 @@ from airflow import DAG
 from datetime import datetime
 from airflow.sdk import Variable, Connection
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+from airflow.operators.python import PythonOperator
 from kubernetes import client, config as k8s_config  # type: ignore
+
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
@@ -46,38 +48,40 @@ def get_connection_properties(dag: DAG) -> dict:
     except Exception:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
-def delete_spark_driver_pod(app_name: str, namespace: str):
-    def callback(context):
-        try:
-            k8s_config.load_incluster_config()
-            v1 = client.CoreV1Api()
 
-            # List ALL pods and log them so we can see what labels exist
-            all_pods = v1.list_namespaced_pod(namespace=namespace)
-            print(f"[cleanup] All pods in namespace '{namespace}':")
-            for pod in all_pods.items:
-                print(f"  - {pod.metadata.name} | phase: {pod.status.phase} | labels: {pod.metadata.labels}")
-
-            # Try the label we think is correct
-            label_selector = f"spark-app-name={app_name}"
-            print(f"[cleanup] Searching with label_selector: '{label_selector}'")
-            pods = v1.list_namespaced_pod(namespace=namespace, label_selector=label_selector)
-            print(f"[cleanup] Found {len(pods.items)} pod(s) matching label")
-
+def make_driver_cleanup_task(app_name: str, namespace: str, dag: DAG, task_id: str) -> PythonOperator:
+    """
+    Dedicated Airflow task that runs after the Spark task and deletes
+    the driver pod. Runs on the Airflow worker — no image dependency.
+    """
+    def delete_driver(**kwargs):
+        import time
+        k8s_config.load_incluster_config()
+        v1 = client.CoreV1Api()
+        label = f"spark-app-name={app_name}"
+        print(f"[cleanup] looking for completed driver pod: {label}")
+        for attempt in range(20):
+            pods = v1.list_namespaced_pod(namespace, label_selector=label)
+            print(f"[cleanup] attempt {attempt+1}/20: found {len(pods.items)} pod(s)")
             for pod in pods.items:
-                print(f"[cleanup] Deleting: {pod.metadata.name} (phase: {pod.status.phase})")
-                v1.delete_namespaced_pod(
-                    name=pod.metadata.name,
-                    namespace=namespace,
-                    body=client.V1DeleteOptions(grace_period_seconds=0)
-                )
-                print(f"[cleanup] Deleted: {pod.metadata.name}")
+                phase = pod.status.phase
+                print(f"[cleanup] pod={pod.metadata.name} phase={phase}")
+                if phase in ("Succeeded", "Failed"):
+                    v1.delete_namespaced_pod(
+                        pod.metadata.name,
+                        namespace,
+                        body=client.V1DeleteOptions(grace_period_seconds=0),
+                    )
+                    print(f"[cleanup] deleted {pod.metadata.name}")
+                    return
+            time.sleep(5)
+        print("[cleanup] no completed driver pod found after all retries, giving up")
 
-        except Exception as e:
-            import traceback
-            print(f"[cleanup] ERROR: {e}")
-            print(traceback.format_exc())
-    return callback
+    return PythonOperator(
+        task_id=task_id,
+        python_callable=delete_driver,
+        dag=dag,
+    )
 
 
 def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
@@ -118,73 +122,11 @@ def build_spark_submit(cfg: dict, app_name: str, script_path: str) -> str:
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/{script_path} &
-
-        SUBMIT_PID=$!
-        echo "[watcher] spark-submit running as PID $SUBMIT_PID"
-
-        python3 - <<'PYEOF' &
-import time, sys
-from kubernetes import client, config as k8s_config
-
-k8s_config.load_incluster_config()
-v1 = client.CoreV1Api()
-namespace = "{cfg['namespace']}"
-label = "spark-app-name={app_name}"
-
-print("[watcher] waiting for driver pod...")
-pod_name = None
-for _ in range(120):
-    pods = v1.list_namespaced_pod(namespace, label_selector=label)
-    if pods.items:
-        pod_name = pods.items[0].metadata.name
-        print(f"[watcher] found driver pod: {{pod_name}}")
-        break
-    time.sleep(2)
-
-if not pod_name:
-    print("[watcher] driver pod never appeared, giving up")
-    sys.exit(0)
-
-print("[watcher] watching for Succeeded/Failed...")
-for _ in range(1200):
-    try:
-        pod = v1.read_namespaced_pod(pod_name, namespace)
-        phase = pod.status.phase
-        print(f"[watcher] phase: {{phase}}")
-        if phase in ("Succeeded", "Failed"):
-            print(f"[watcher] deleting {{pod_name}}...")
-            v1.delete_namespaced_pod(
-                pod_name, namespace,
-                body=client.V1DeleteOptions(grace_period_seconds=0)
-            )
-            print("[watcher] deleted successfully")
-            break
-    except Exception as e:
-        print(f"[watcher] error: {{e}}")
-        break
-    time.sleep(3)
-PYEOF
-
-        WATCHER_PID=$!
-        echo "[watcher] watcher running as PID $WATCHER_PID"
-
-        wait $SUBMIT_PID
-        SPARK_RC=$?
-        echo "[watcher] spark-submit exited with $SPARK_RC"
-        wait $WATCHER_PID
-        echo "[watcher] watcher done"
-        exit $SPARK_RC
+          local:///opt/spark/work-dir/src/bronze/python/{script_path}
     """
 
-def make_spark_task(
-    cfg: dict,
-    app_name: str,
-    task_id: str,
-    pod_name: str,
-    script_path: str,
-) -> KubernetesPodOperator:
-    cleanup = delete_spark_driver_pod(app_name, cfg["namespace"])
+
+def make_spark_task(cfg: dict, app_name: str, task_id: str, pod_name: str, script_path: str) -> KubernetesPodOperator:
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
         service_account_name="spark-role",
@@ -196,8 +138,6 @@ def make_spark_task(
         task_id=task_id,
         get_logs=True,
         on_finish_action="delete_pod",
-        on_success_callback=cleanup,
-        on_failure_callback=cleanup,
         dag=cfg["dag"],
     )
 
@@ -233,10 +173,19 @@ tasks = [
     ("student_courseenrollment_history_ingestion",      "student_courseenrollment_history_ingestion_1",      "student_courseenrollment_history_ingestion",      "bronze_student_courseenrollment_history_ingestion.py"),
 ]
 
-task_objects = [
-    make_spark_task(cfg, app_name, task_id, pod_name, script)
-    for app_name, task_id, pod_name, script in tasks
-]
+# Build interleaved spark + cleanup task chain
+all_tasks = []
+for app_name, task_id, pod_name, script in tasks:
+    spark_task = make_spark_task(cfg, app_name, task_id, pod_name, script)
+    cleanup_task = make_driver_cleanup_task(
+        app_name=app_name,
+        namespace=cfg["namespace"],
+        dag=bronze_dag_test,
+        task_id=f"cleanup_{task_id}",
+    )
+    all_tasks.append(spark_task)
+    all_tasks.append(cleanup_task)
 
-for i in range(len(task_objects) - 1):
-    task_objects[i] >> task_objects[i + 1]  # type: ignore
+# Chain: spark1 >> cleanup1 >> spark2 >> cleanup2 >> ...
+for i in range(len(all_tasks) - 1):
+    all_tasks[i] >> all_tasks[i + 1]  # type: ignore
