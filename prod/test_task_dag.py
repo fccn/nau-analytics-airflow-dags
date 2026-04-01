@@ -3,17 +3,16 @@ from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
 
-_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
-
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        mysql_conn = Connection.get("sql_source_stage_connection")
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        mysql_conn = Connection.get("sql_source_prod_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         return {
             "dag": dag,
+            "script": Variable.get("script"),
             "docker_image": Variable.get("docker_image"),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
@@ -43,17 +42,11 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_silver_task(
-    cfg: dict,
-    task_name: str,
-    script: str,
-    image: str | None = None,
-) -> KubernetesPodOperator:
-    pod_image = image or cfg["docker_image"]
+def test_task_ingestion(cfg: dict) -> KubernetesPodOperator:
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
         service_account_name="spark-role",
-        image=pod_image,
+        image="nauedu/nau-analytics-spark-shell:d465952",
         startup_timeout_seconds=600,
         cmds=["/bin/bash", "-c"],
         arguments=[
@@ -61,8 +54,8 @@ def make_silver_task(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name {task_name} \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
+          --name test_task_ingestion \
+          --conf spark.kubernetes.container.image=nauedu/nau-analytics-external-data-product:feature-ingestion-script-improvements \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
@@ -94,12 +87,12 @@ def make_silver_task(
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/silver/{script}\
+          local:///opt/spark/work-dir/src/bronze/python/{cfg["script"]}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
             """
         ],
-        name=task_name,
-        task_id=f"{task_name}_1",
+        name="test_task_ingestion",
+        task_id="test_task_ingestion_1",
         get_logs=True,
         on_finish_action="delete_pod",
         dag=cfg["dag"],
@@ -114,30 +107,13 @@ default_args = {
     "email_on_retry": False,
 }
 
-silver_dag = DAG(
-    dag_id="silver_dag",
+test_bronze_dag = DAG(
+    dag_id="test_task_dag",
     default_args=default_args,
-    schedule="0 4 * * *",
-    tags=["silver_table_clean", "stage"],
+    schedule=None,
+    tags=["test_task_dag", "prod"],
 )
 
-cfg = get_connection_properties(silver_dag)
-
-# (task_name, script, image)
-# image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
-SILVER_TASKS = [
-    ("auth_user_silver",                       "silver_auth_user.py",                       None),
-    ("auth_userprofile_silver",                "silver_auth_userprofile.py",                None),
-    ("certificates_generatedcertificate_silver","silver_certificates_generatedcertificate.py",None),
-    ("course_overviews_courseoverview_silver",  "silver_course_overviews_courseoverview.py", _LEGACY_IMAGE),
-    ("grades_persistentcoursegrade_silver",    "silver_grades_persistentcoursegrade.py",    None),
-    ("organizations_ho_silver",                "silver_organizations_ho.py",                None),
-    ("organizations_organization_silver",      "silver_organizations_organization.py",      _LEGACY_IMAGE),
-    ("student_courseenrollment_silver",        "silver_student_courseenrollment.py",        _LEGACY_IMAGE),
-    ("student_courseenrollment_history_silver","silver_student_courseenrollment_history.py",_LEGACY_IMAGE),
-]
-
-tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
-
-for upstream, downstream in zip(tasks, tasks[1:]):
-    upstream >> downstream  # type: ignore
+cfg = get_connection_properties(test_bronze_dag)
+test_dag_task = test_task_ingestion(cfg=cfg)
+test_dag_task  # type: ignore

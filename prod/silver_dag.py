@@ -8,9 +8,9 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        mysql_conn = Connection.get("sql_source_stage_connection")
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        mysql_conn = Connection.get("sql_source_prod_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         return {
             "dag": dag,
@@ -118,7 +118,7 @@ silver_dag = DAG(
     dag_id="silver_dag",
     default_args=default_args,
     schedule="0 4 * * *",
-    tags=["silver_table_clean", "stage"],
+    tags=["silver_table_clean", "prod"],
 )
 
 cfg = get_connection_properties(silver_dag)

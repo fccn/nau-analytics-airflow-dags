@@ -1,67 +1,68 @@
-from airflow import DAG #type: ignore
+from airflow import DAG  # type: ignore
 from datetime import datetime
-from airflow.sdk import Variable,Connection #type: ignore
-from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator #type: ignore
-def get_connection_properties(dag: DAG)->dict:
-    
+from airflow.sdk import Variable, Connection  # type: ignore
+from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+
+_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+
+
+def get_connection_properties(dag: DAG) -> dict:
     try:
-        config = {}
-        config["docker_image"] = Variable.get("docker_image")
-        config["dag"] = dag
-        config["namespace"] = Variable.get("namespace")
-        
         mysql_conn = Connection.get("sql_source_stage_connection")
-        config["database"] = mysql_conn.extra_dejson.get("mysqldatabase")
-        config["host"] = mysql_conn.host
-        config["user"] = mysql_conn.login
-        config["port"] = mysql_conn.port
-        config["secret"] = mysql_conn.password
-        
-
         s3_conn = Connection.get("s3_stage_connection")
-        config["S3_ACCESS_KEY"] = s3_conn.login
-        config["S3_SECRET_KEY"] = s3_conn.password
-        config["S3_ENDPOINT"] =s3_conn.extra_dejson.get("s3endpoint")
-
-        iceberg_catalog_conn = Connection.get("iceberg_stage_connection")
-        config["ICEBERG_CATALOG_HOST"] =iceberg_catalog_conn.host
-        config["ICEBERG_CATALOG_PORT"] = iceberg_catalog_conn.port
-        config["ICEBERG_CATALOG_USER"] = iceberg_catalog_conn.login
-        config["ICEBERG_CATALOG_PASSWORD"] =iceberg_catalog_conn.password        
-       
-        config["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_database_catalog_name")
-        config["BRONZE_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_name")
-        config["BRONZE_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("bronze_iceberg_catalog_warehouse")
-        
-        config["SILVER_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_database_catalog_name")
-        config["SILVER_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_catalog_name")
-        config["SILVER_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("silver_iceberg_catalog_warehouse")    
-
-        config["GOLD_ICEBERG_DATABASE_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_database_catalog_name")
-        config["GOLD_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_name")
-        config["GOLD_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_warehouse")
-        
-        config["ENVIRONMENT"] = Variable.get("ENVIRONMENT")
-        return config
+        iceberg_conn = Connection.get("iceberg_stage_connection")
+        iceberg_extra = iceberg_conn.extra_dejson
+        return {
+            "dag": dag,
+            "docker_image": Variable.get("docker_image"),
+            "namespace": Variable.get("namespace"),
+            "ENVIRONMENT": Variable.get("ENVIRONMENT"),
+            "database": mysql_conn.extra_dejson.get("mysqldatabase"),
+            "host": mysql_conn.host,
+            "user": mysql_conn.login,
+            "port": mysql_conn.port,
+            "secret": mysql_conn.password,
+            "S3_ACCESS_KEY": s3_conn.login,
+            "S3_SECRET_KEY": s3_conn.password,
+            "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
+            "ICEBERG_CATALOG_HOST": iceberg_conn.host,
+            "ICEBERG_CATALOG_PORT": iceberg_conn.port,
+            "ICEBERG_CATALOG_USER": iceberg_conn.login,
+            "ICEBERG_CATALOG_PASSWORD": iceberg_conn.password,
+            "BRONZE_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_database_catalog_name"),
+            "BRONZE_ICEBERG_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_catalog_name"),
+            "BRONZE_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("bronze_iceberg_catalog_warehouse"),
+            "SILVER_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("silver_iceberg_database_catalog_name"),
+            "SILVER_ICEBERG_CATALOG_NAME": iceberg_extra.get("silver_iceberg_catalog_name"),
+            "SILVER_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("silver_iceberg_catalog_warehouse"),
+            "GOLD_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("gold_iceberg_database_catalog_name"),
+            "GOLD_ICEBERG_CATALOG_NAME": iceberg_extra.get("gold_iceberg_catalog_name"),
+            "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
+        }
     except Exception:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
-def course_overviews_courseoverview_ingestion(cfg:dict) -> KubernetesPodOperator:
+
+def make_ingestion_task(
+    cfg: dict,
+    task_name: str,
+    spark_job_name: str,
+    script: str,
+    image: str | None = None,
+) -> KubernetesPodOperator:
+    pod_image = image or cfg["docker_image"]
     return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image=cfg["docker_image"],
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
+        namespace=cfg["namespace"],
+        service_account_name="spark-role",
+        image=pod_image,
+        startup_timeout_seconds=600,
+        cmds=["/bin/bash", "-c"],
+        arguments=[
+            f"""
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name course_overviews_courseoverview-ingestion \
+          --name {spark_job_name} \
           --conf spark.kubernetes.container.image={cfg['docker_image']} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
@@ -94,639 +95,52 @@ def course_overviews_courseoverview_ingestion(cfg:dict) -> KubernetesPodOperator
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_course_overviews_courseoverview_ingestion.py\
+          local:///opt/spark/work-dir/src/bronze/python/{script}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="course_overviews_courseoverview_ingestion",
-    task_id="course_overviews_courseoverview_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def certificates_generatedcertificate_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image=cfg['docker_image'],
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name certificates_generatedcertificate_ingestion-ingestion \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_certificates_generatedcertificate_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="certificates_generatedcertificate_ingestion",
-    task_id="certificates_generatedcertificate_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def grades_persistentcoursegrade_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image=cfg['docker_image'],
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name grades_persistentcoursegrade-ingestion \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_grades_persistentcoursegrade_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="grades_persistentcoursegrade_ingestion",
-    task_id="grades_persistentcoursegrade_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def auth_user_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image=cfg['docker_image'],
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name auth_user_ingestion \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_auth_user_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="auth_user_ingestion",
-    task_id="auth_user_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def bronze_auth_userprofile_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image=cfg['docker_image'],
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name bronze_auth_userprofile_ingestion \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_auth_userprofile_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="auth_userprofile_ingestion",
-    task_id="auth_userprofile_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def organizations_organization_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name organizations_organization-ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_organizations_organization_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="organizations_organization_ingestion",
-    task_id="organizations_organization_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def student_courseaccessrole_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name student_courseaccessrole-ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_student_courseaccessrole_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="student_courseaccessrole_ingestion",
-    task_id="student_courseaccessrole_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def student_userattribute_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name student_userattribute-ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_student_userattribute_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="student_userattribute_ingestion",
-    task_id="student_userattribute_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def student_courseenrollment_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name student_courseenrollment-ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_student_courseenrollment_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="student_courseenrollment_ingestion",
-    task_id="student_courseenrollment_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def organizations_ho_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name organizations_ho_ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_organizations_ho_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="organizations_ho_ingestion",
-    task_id="organizations_ho_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
-    )
-
-def student_courseenrollment_history_ingestion(cfg:dict) -> KubernetesPodOperator:
-    return KubernetesPodOperator(
-    namespace=cfg["namespace"],
-    service_account_name='spark-role',
-    # ✔ official spark image built for k8s
-    image='nauedu/nau-analytics-spark-shell:d465952',
-    startup_timeout_seconds=600,
-    # ✔ override entrypoint to run spark-submit
-    cmds=["/bin/bash", "-c"],
-    # ✔ submit a SparkPi example packaged inside the image
-    arguments=[
-        f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name student_courseenrollment_history_ingestion \
-          --conf spark.kubernetes.container.image={cfg["docker_image"]} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_PORT={cfg["port"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_USER={cfg["user"]} \
-          --conf spark.kubernetes.driverEnv.MYSQL_SECRET={cfg["secret"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/bronze_student_courseenrollment_history_ingestion.py\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-        """
-    ],
-    name="student_courseenrollment_history_ingestion",
-    task_id="student_courseenrollment_history_ingestion_1",
-    get_logs=True,
-    on_finish_action="delete_pod",
-    dag = cfg["dag"]
+            """
+        ],
+        name=task_name,
+        task_id=f"{task_name}_1",
+        get_logs=True,
+        on_finish_action="delete_pod",
+        dag=cfg["dag"],
     )
 
 
 default_args = {
-    "start_date":datetime(2023, 1, 1),
-    "catchup":False,
-    "email":[],
-    'email_on_failure': False,
-    'email_on_retry': False,
-
+    "start_date": datetime(2023, 1, 1),
+    "catchup": False,
+    "email": [],
+    "email_on_failure": False,
+    "email_on_retry": False,
 }
 
-bronze_dag =  DAG(dag_id="bronze_ingestion_dag",
-default_args=default_args,
-schedule="0 3 * * *",  # Run at 3:00 every day
-tags=["bronze_table_ingestion","stage"],
-) 
+bronze_dag = DAG(
+    dag_id="bronze_ingestion_dag",
+    default_args=default_args,
+    schedule="0 3 * * *",
+    tags=["bronze_table_ingestion", "stage"],
+)
 
 cfg = get_connection_properties(bronze_dag)
 
+# (task_name, spark_job_name, script, image)
+# image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
+INGESTION_TASKS = [
+    ("course_overviews_courseoverview_ingestion",  "course_overviews_courseoverview-ingestion",          "bronze_course_overviews_courseoverview_ingestion.py",  None),
+    ("certificates_generatedcertificate_ingestion","certificates_generatedcertificate_ingestion-ingestion","bronze_certificates_generatedcertificate_ingestion.py",None),
+    ("grades_persistentcoursegrade_ingestion",     "grades_persistentcoursegrade-ingestion",             "bronze_grades_persistentcoursegrade_ingestion.py",     None),
+    ("auth_user_ingestion",                        "auth_user_ingestion",                                "bronze_auth_user_ingestion.py",                        None),
+    ("auth_userprofile_ingestion",                 "bronze_auth_userprofile_ingestion",                  "bronze_auth_userprofile_ingestion.py",                 None),
+    ("organizations_organization_ingestion",       "organizations_organization-ingestion",               "bronze_organizations_organization_ingestion.py",       _LEGACY_IMAGE),
+    ("student_courseaccessrole_ingestion",         "student_courseaccessrole-ingestion",                 "bronze_student_courseaccessrole_ingestion.py",         _LEGACY_IMAGE),
+    ("student_courseenrollment_ingestion",         "student_courseenrollment-ingestion",                 "bronze_student_courseenrollment_ingestion.py",         _LEGACY_IMAGE),
+    ("student_userattribute_ingestion",            "student_userattribute-ingestion",                    "bronze_student_userattribute_ingestion.py",            _LEGACY_IMAGE),
+    ("organizations_ho_ingestion",                 "organizations_ho_ingestion",                         "bronze_organizations_ho_ingestion.py",                 _LEGACY_IMAGE),
+    ("student_courseenrollment_history_ingestion", "student_courseenrollment_history_ingestion",         "bronze_student_courseenrollment_history_ingestion.py", _LEGACY_IMAGE),
+]
 
-course_overviews_courseoverview_ingestion_task = course_overviews_courseoverview_ingestion(cfg=cfg)
-certificates_generatedcertificate_ingestion_task = certificates_generatedcertificate_ingestion(cfg=cfg)
-grades_persistentcoursegrade_ingestion_task = grades_persistentcoursegrade_ingestion(cfg=cfg)
+tasks = [make_ingestion_task(cfg, *task) for task in INGESTION_TASKS]
 
-auth_user_ingestion_task = auth_user_ingestion(cfg=cfg)
-auth_userprofile_ingestion_task = bronze_auth_userprofile_ingestion(cfg=cfg)
-
-organizations_organization_ingestion_task = organizations_organization_ingestion(cfg=cfg)
-student_courseaccessrole_ingestion_task = student_courseaccessrole_ingestion(cfg=cfg)
-student_courseenrollment_ingestion_task = student_courseenrollment_ingestion(cfg=cfg)
-student_userattribute_ingestion_task = student_userattribute_ingestion(cfg=cfg)
-
-organizations_ho_ingestion_task = organizations_ho_ingestion(cfg=cfg)
-student_courseenrollment_history_ingestion_task = student_courseenrollment_history_ingestion(cfg=cfg)
-
-course_overviews_courseoverview_ingestion_task >> certificates_generatedcertificate_ingestion_task >> grades_persistentcoursegrade_ingestion_task >> auth_user_ingestion_task >> auth_userprofile_ingestion_task >> organizations_organization_ingestion_task >> student_courseaccessrole_ingestion_task >> student_courseenrollment_ingestion_task >> student_userattribute_ingestion_task >> organizations_ho_ingestion_task >> student_courseenrollment_history_ingestion_task #type: ignore
+for upstream, downstream in zip(tasks, tasks[1:]):
+    upstream >> downstream  # type: ignore

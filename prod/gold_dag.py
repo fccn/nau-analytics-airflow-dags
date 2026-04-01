@@ -8,9 +8,9 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        mysql_conn = Connection.get("sql_source_stage_connection")
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        mysql_conn = Connection.get("sql_source_prod_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         return {
             "dag": dag,
@@ -43,17 +43,12 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_silver_task(
-    cfg: dict,
-    task_name: str,
-    script: str,
-    image: str | None = None,
-) -> KubernetesPodOperator:
-    pod_image = image or cfg["docker_image"]
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image: str | None = None) -> KubernetesPodOperator:
+    image = pod_image or cfg["docker_image"]
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
         service_account_name="spark-role",
-        image=pod_image,
+        image=image,
         startup_timeout_seconds=600,
         cmds=["/bin/bash", "-c"],
         arguments=[
@@ -61,13 +56,13 @@ def make_silver_task(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name {task_name} \
+          --name {name} \
           --conf spark.kubernetes.container.image={cfg['docker_image']} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
+          --conf spark.executor.instances=1 \
+          --conf spark.executor.cores={executor_cores} \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
@@ -94,12 +89,12 @@ def make_silver_task(
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/silver/{script}\
+          local:///opt/spark/work-dir/src/gold/{script}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
-            """
+        """
         ],
-        name=task_name,
-        task_id=f"{task_name}_1",
+        name=name,
+        task_id=f"{name}_1",
         get_logs=True,
         on_finish_action="delete_pod",
         dag=cfg["dag"],
@@ -114,30 +109,22 @@ default_args = {
     "email_on_retry": False,
 }
 
-silver_dag = DAG(
-    dag_id="silver_dag",
+gold_dag = DAG(
+    dag_id="gold_dag",
     default_args=default_args,
-    schedule="0 4 * * *",
-    tags=["silver_table_clean", "stage"],
+    schedule="0 5 * * *",
+    tags=["gold_table_transform", "prod"],
 )
 
-cfg = get_connection_properties(silver_dag)
+cfg = get_connection_properties(gold_dag)
 
-# (task_name, script, image)
-# image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
-SILVER_TASKS = [
-    ("auth_user_silver",                       "silver_auth_user.py",                       None),
-    ("auth_userprofile_silver",                "silver_auth_userprofile.py",                None),
-    ("certificates_generatedcertificate_silver","silver_certificates_generatedcertificate.py",None),
-    ("course_overviews_courseoverview_silver",  "silver_course_overviews_courseoverview.py", _LEGACY_IMAGE),
-    ("grades_persistentcoursegrade_silver",    "silver_grades_persistentcoursegrade.py",    None),
-    ("organizations_ho_silver",                "silver_organizations_ho.py",                None),
-    ("organizations_organization_silver",      "silver_organizations_organization.py",      _LEGACY_IMAGE),
-    ("student_courseenrollment_silver",        "silver_student_courseenrollment.py",        _LEGACY_IMAGE),
-    ("student_courseenrollment_history_silver","silver_student_courseenrollment_history.py",_LEGACY_IMAGE),
-]
+dim_time_task                     = make_gold_operator(cfg, "dim_time_gold",                   "gold_dim_time.py",                  executor_cores=1)
+dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py")
+dim_organization_task             = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
+dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
+fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
+fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py",       pod_image=_LEGACY_IMAGE)
+fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py", pod_image=_LEGACY_IMAGE)
+fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold","gold_fact_course_enrollment_d.py",  pod_image=_LEGACY_IMAGE)
 
-tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
-
-for upstream, downstream in zip(tasks, tasks[1:]):
-    upstream >> downstream  # type: ignore
+dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task  # type: ignore

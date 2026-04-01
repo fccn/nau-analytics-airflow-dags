@@ -8,9 +8,9 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        mysql_conn = Connection.get("sql_source_stage_connection")
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        mysql_conn = Connection.get("sql_source_prod_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         return {
             "dag": dag,
@@ -43,9 +43,10 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_silver_task(
+def make_ingestion_task(
     cfg: dict,
     task_name: str,
+    spark_job_name: str,
     script: str,
     image: str | None = None,
 ) -> KubernetesPodOperator:
@@ -61,7 +62,7 @@ def make_silver_task(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name {task_name} \
+          --name {spark_job_name} \
           --conf spark.kubernetes.container.image={cfg['docker_image']} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
@@ -94,7 +95,7 @@ def make_silver_task(
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/silver/{script}\
+          local:///opt/spark/work-dir/src/bronze/python/{script}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
             """
         ],
@@ -114,30 +115,32 @@ default_args = {
     "email_on_retry": False,
 }
 
-silver_dag = DAG(
-    dag_id="silver_dag",
+bronze_dag = DAG(
+    dag_id="bronze_ingestion_dag",
     default_args=default_args,
-    schedule="0 4 * * *",
-    tags=["silver_table_clean", "stage"],
+    schedule="0 3 * * *",
+    tags=["bronze_table_ingestion", "prod"],
 )
 
-cfg = get_connection_properties(silver_dag)
+cfg = get_connection_properties(bronze_dag)
 
-# (task_name, script, image)
+# (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
-SILVER_TASKS = [
-    ("auth_user_silver",                       "silver_auth_user.py",                       None),
-    ("auth_userprofile_silver",                "silver_auth_userprofile.py",                None),
-    ("certificates_generatedcertificate_silver","silver_certificates_generatedcertificate.py",None),
-    ("course_overviews_courseoverview_silver",  "silver_course_overviews_courseoverview.py", _LEGACY_IMAGE),
-    ("grades_persistentcoursegrade_silver",    "silver_grades_persistentcoursegrade.py",    None),
-    ("organizations_ho_silver",                "silver_organizations_ho.py",                None),
-    ("organizations_organization_silver",      "silver_organizations_organization.py",      _LEGACY_IMAGE),
-    ("student_courseenrollment_silver",        "silver_student_courseenrollment.py",        _LEGACY_IMAGE),
-    ("student_courseenrollment_history_silver","silver_student_courseenrollment_history.py",_LEGACY_IMAGE),
+INGESTION_TASKS = [
+    ("course_overviews_courseoverview_ingestion",  "course_overviews_courseoverview-ingestion",          "bronze_course_overviews_courseoverview_ingestion.py",  None),
+    ("certificates_generatedcertificate_ingestion","certificates_generatedcertificate_ingestion-ingestion","bronze_certificates_generatedcertificate_ingestion.py",None),
+    ("grades_persistentcoursegrade_ingestion",     "grades_persistentcoursegrade-ingestion",             "bronze_grades_persistentcoursegrade_ingestion.py",     None),
+    ("auth_user_ingestion",                        "auth_user_ingestion",                                "bronze_auth_user_ingestion.py",                        None),
+    ("auth_userprofile_ingestion",                 "bronze_auth_userprofile_ingestion",                  "bronze_auth_userprofile_ingestion.py",                 None),
+    ("organizations_organization_ingestion",       "organizations_organization-ingestion",               "bronze_organizations_organization_ingestion.py",       _LEGACY_IMAGE),
+    ("student_courseaccessrole_ingestion",         "student_courseaccessrole-ingestion",                 "bronze_student_courseaccessrole_ingestion.py",         _LEGACY_IMAGE),
+    ("student_courseenrollment_ingestion",         "student_courseenrollment-ingestion",                 "bronze_student_courseenrollment_ingestion.py",         _LEGACY_IMAGE),
+    ("student_userattribute_ingestion",            "student_userattribute-ingestion",                    "bronze_student_userattribute_ingestion.py",            _LEGACY_IMAGE),
+    ("organizations_ho_ingestion",                 "organizations_ho_ingestion",                         "bronze_organizations_ho_ingestion.py",                 _LEGACY_IMAGE),
+    ("student_courseenrollment_history_ingestion", "student_courseenrollment_history_ingestion",         "bronze_student_courseenrollment_history_ingestion.py", _LEGACY_IMAGE),
 ]
 
-tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
+tasks = [make_ingestion_task(cfg, *task) for task in INGESTION_TASKS]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
