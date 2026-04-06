@@ -2,6 +2,7 @@ from airflow import DAG #type: ignore
 from datetime import datetime
 from airflow.sdk import Variable,Connection #type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator #type: ignore
+from kubernetes.client import V1ResourceRequirements
 
 def get_connection_properties(dag: DAG)->dict:
     try:
@@ -59,6 +60,10 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
         service_account_name='spark-role',
         image=image,
         startup_timeout_seconds=600,
+        container_resources=V1ResourceRequirements(
+            requests={"cpu": "500m", "memory": "512Mi"},
+            limits={"cpu": "1", "memory": "1Gi"},
+        ),
         cmds=["/bin/bash", "-c"],
         arguments=[
             f"""
