@@ -2,6 +2,7 @@ from airflow import DAG  # type: ignore
 from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+from kubernetes.client import V1ResourceRequirements
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
@@ -49,13 +50,23 @@ def make_ingestion_task(
     spark_job_name: str,
     script: str,
     image: str | None = None,
+    executor_cores: int = 2,
 ) -> KubernetesPodOperator:
     pod_image = image or cfg["docker_image"]
+
+    driver_memory = "8g"
+    executor_memory = "8g"
+    memory_overhead = "2g"
+
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
         service_account_name="spark-role",
         image=pod_image,
         startup_timeout_seconds=600,
+        container_resources=V1ResourceRequirements(
+            requests={"cpu": "500m", "memory": "512Mi"},
+            limits={"cpu": "1", "memory": "1Gi"},
+        ),
         cmds=["/bin/bash", "-c"],
         arguments=[
             f"""
@@ -67,9 +78,17 @@ def make_ingestion_task(
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
+          --conf spark.driver.cores=2 \
+          --conf spark.driver.memory={driver_memory} \
+          --conf spark.driver.memoryOverhead={memory_overhead} \
           --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
+          --conf spark.executor.cores={executor_cores} \
+          --conf spark.executor.memory={executor_memory} \
+          --conf spark.executor.memoryOverhead={memory_overhead} \
+          --conf spark.kubernetes.driver.request.cores=2 \
+          --conf spark.kubernetes.driver.limit.cores=4 \
+          --conf spark.kubernetes.executor.request.cores={executor_cores} \
+          --conf spark.kubernetes.executor.limit.cores={executor_cores * 2} \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_DATABASE={cfg["database"]} \
           --conf spark.kubernetes.driverEnv.MYSQL_HOST={cfg["host"]} \
