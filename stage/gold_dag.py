@@ -46,7 +46,7 @@ def get_connection_properties(dag: DAG)->dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 4, pod_image=None) -> KubernetesPodOperator:
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image=None) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -65,7 +65,7 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
           --conf spark.driver.cores=2 \
-          --conf spark.driver.memory=16g \
+          --conf spark.driver.memory=8g \
           --conf spark.executor.instances=2 \
           --conf spark.executor.cores={executor_cores} \
           --conf spark.executor.memory=8g \
