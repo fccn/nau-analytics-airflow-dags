@@ -49,8 +49,8 @@ def make_ingestion_task(
     task_name: str,
     spark_job_name: str,
     script: str,
-    executor_cores: int = 2,
     image: str | None = None,
+    executor_cores: int = 2,
 ) -> KubernetesPodOperator:
     pod_image = image or cfg["docker_image"]
 
