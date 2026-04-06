@@ -74,7 +74,7 @@ def make_ingestion_task(
             spark-submit \
           --master k8s://https://kubernetes.default.svc:443 \
           --deploy-mode cluster \
-          --name {name} \
+          --name {spark_job_name} \
           --conf spark.kubernetes.container.image={cfg['docker_image']} \
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
