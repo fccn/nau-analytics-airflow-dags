@@ -110,7 +110,7 @@ default_args = {
 }
 
 bronze_dag = DAG(
-    dag_id="bronze_ingestion_dag",
+    dag_id="management_bronze_ingestion_dag",
     default_args=default_args,
     schedule="0 1 * * *",
     tags=["jira_bronze_table_ingestion", "stage"],
