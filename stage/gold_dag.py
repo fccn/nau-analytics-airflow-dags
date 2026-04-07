@@ -147,8 +147,8 @@ dim_user_task                  = make_gold_operator(cfg, "dim_user_gold",       
 dim_organization_task          = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
 dim_course_edition_task        = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
 fact_certificate_d_task        = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
-fact_student_grades_task       = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py",       pod_image=_LEGACY_IMAGE)
-fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py", pod_image=_LEGACY_IMAGE)
-fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py",  pod_image=_LEGACY_IMAGE)
+fact_student_grades_task       = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
+fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
+fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py")
 
 dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task #type: ignore
