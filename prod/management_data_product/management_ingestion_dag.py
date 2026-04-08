@@ -1,6 +1,7 @@
 from airflow import DAG  # type: ignore
 from datetime import datetime
 import json
+import base64
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
 
@@ -18,8 +19,8 @@ def get_connection_properties(dag: DAG) -> dict:
             "docker_image": Variable.get("management_docker_image").strip(),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON": json.dumps(json.loads(google_string_connection.password)),
-            "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
+            "GOOGLE_ACCOUNT_JSON": base64.b64encode(json.dumps(json.loads(google_string_connection.password)).encode()).decode(),
+            "GOOGLE_SHEET_ID": base64.b64encode(Variable.get("JIRA_GOOGLE_SHEET_ID").encode()).decode(),
             "S3_ACCESS_KEY": s3_conn.login,
             "S3_SECRET_KEY": s3_conn.password,
             "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
