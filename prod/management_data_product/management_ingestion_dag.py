@@ -123,7 +123,7 @@ cfg = get_connection_properties(bronze_dag)
 # (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
 INGESTION_TASKS = [
-    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze_jira_ingestion.py",  None),
+    # ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze_jira_ingestion.py",  None),
     ("downtimes_google_sheet_ingestion",  "downtimes_google_sheet_ingestion-ingestion","bronze_downtimes_ingestion.py",  None),
 ]
 
