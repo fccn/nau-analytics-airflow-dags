@@ -15,7 +15,7 @@ def get_connection_properties(dag: DAG) -> dict:
         google_string_connection = Connection.get("google_account")
         return {
             "dag": dag,
-            "docker_image": Variable.get("management_docker_image"),
+            "docker_image": Variable.get("management_docker_image").strip(),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
             "GOOGLE_ACCOUNT_JSON": json.dumps(json.loads(google_string_connection.password)),
