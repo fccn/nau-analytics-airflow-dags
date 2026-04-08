@@ -1,5 +1,6 @@
 from airflow import DAG  # type: ignore
 from datetime import datetime
+import json
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
 
@@ -17,7 +18,7 @@ def get_connection_properties(dag: DAG) -> dict:
             "docker_image": Variable.get("management_docker_image"),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON":google_string_connection.password,
+            "GOOGLE_ACCOUNT_JSON": json.dumps(json.loads(google_string_connection.password)),
             "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
             "S3_ACCESS_KEY": s3_conn.login,
             "S3_SECRET_KEY": s3_conn.password,
@@ -68,7 +69,7 @@ def make_ingestion_task(
           --conf spark.executor.cores=1 \
           --conf spark.executor.memory=8g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf spark.kubernetes.driverEnv.GOOGLE_ACCOUNT_JSON={cfg["GOOGLE_ACCOUNT_JSON"]} \
+          --conf 'spark.kubernetes.driverEnv.GOOGLE_ACCOUNT_JSON={cfg["GOOGLE_ACCOUNT_JSON"]}' \
           --conf spark.kubernetes.driverEnv.GOOGLE_SHEET_ID={cfg["GOOGLE_SHEET_ID"]} \
           --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
           --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
