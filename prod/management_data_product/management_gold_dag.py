@@ -8,8 +8,8 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         google_string_connection = Connection.get("google_account")
         return {
