@@ -114,22 +114,26 @@ default_args = {
 }
 
 bronze_dag = DAG(
-    dag_id="management_bronze_ingestion_dag",
+    dag_id="management_dag",
     default_args=default_args,
     schedule="0 1 * * *",
-    tags=["jira_bronze_table_ingestion", "stage", "management_data_product"],
+    tags=["management_DAG_ingestion", "prod", "management_data_product"],
 )
 
 cfg = get_connection_properties(bronze_dag)
 
 # (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
-INGESTION_TASKS = [
+TASKS = [
     ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze_jira_ingestion.py",  None),
     ("downtimes_google_sheet_ingestion",  "downtimes_google_sheet_ingestion-ingestion","bronze_downtimes_ingestion.py",  None),
+    ("jira_google_sheet_silver",  "jira_google_sheet_silver-ingestion","silver_gestao_jira.py",  None),
+    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver_gestao_downtimes.py",  None),
+    ("jira_google_sheet_gold",  "jira_google_sheet_gold-ingestion","gold_gestao_jira.py",  None),
+    ("downtimes_google_sheet_gold",  "downtimes_google_sheet_gold-ingestion","gold_gestao_downtimes.py",  None),
 ]
 
-tasks = [make_ingestion_task(cfg, *task) for task in INGESTION_TASKS]
+tasks = [make_ingestion_task(cfg, *task) for task in TASKS]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
