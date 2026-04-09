@@ -93,7 +93,7 @@ def make_ingestion_task(
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/bronze/python/{script}\
+          local:///opt/spark/work-dir/src/{script}\
           2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
             """
         ],
@@ -125,12 +125,12 @@ cfg = get_connection_properties(bronze_dag)
 # (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
 TASKS = [
-    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze_jira_ingestion.py",  None),
-    ("downtimes_google_sheet_ingestion",  "downtimes_google_sheet_ingestion-ingestion","bronze_downtimes_ingestion.py",  None),
-    ("jira_google_sheet_silver",  "jira_google_sheet_silver-ingestion","silver_gestao_jira.py",  None),
-    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver_gestao_downtimes.py",  None),
-    ("jira_google_sheet_gold",  "jira_google_sheet_gold-ingestion","gold_gestao_jira.py",  None),
-    ("downtimes_google_sheet_gold",  "downtimes_google_sheet_gold-ingestion","gold_gestao_downtimes.py",  None),
+    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze/python/bronze_jira_ingestion.py",  None),
+    ("downtimes_google_sheet_ingestion",  "downtimes_google_sheet_ingestion-ingestion","bronze/python/bronze_downtimes_ingestion.py",  None),
+    ("jira_google_sheet_silver",  "jira_google_sheet_silver-ingestion","silver/python/silver_gestao_jira.py",  None),
+    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver/python/silver_gestao_downtimes.py",  None),
+    ("jira_google_sheet_gold",  "jira_google_sheet_gold-ingestion","gold/python/gold_gestao_jira.py",  None),
+    ("downtimes_google_sheet_gold",  "downtimes_google_sheet_gold-ingestion","gold/python/gold_gestao_downtimes.py",  None),
 ]
 
 tasks = [make_ingestion_task(cfg, *task) for task in TASKS]
