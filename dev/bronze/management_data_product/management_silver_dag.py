@@ -64,9 +64,9 @@ def make_ingestion_task(
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
+          --conf spark.executor.memory=4g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf 'spark.kubernetes.driverEnv.GOOGLE_ACCOUNT_JSON={cfg["GOOGLE_ACCOUNT_JSON"]}' \
           --conf spark.kubernetes.driverEnv.DOWNTIMES_GOOGLE_SHEET_ID={cfg["DOWNTIMES_GOOGLE_SHEET_ID"]} \
