@@ -18,7 +18,7 @@ def get_connection_properties(dag: DAG) -> dict:
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
             "GOOGLE_ACCOUNT_JSON":google_string_connection.password,
-            "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
+            "DOWNTIMES_GOOGLE_SHEET_ID":Variable.get("DOWNTIMES_GOOGLE_SHEET_ID"),
             "S3_ACCESS_KEY": s3_conn.login,
             "S3_SECRET_KEY": s3_conn.password,
             "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
@@ -64,12 +64,12 @@ def make_ingestion_task(
           --conf spark.kubernetes.namespace={cfg["namespace"]} \
           --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
           --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
+          --conf spark.executor.instances=1 \
           --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
+          --conf spark.executor.memory=4g \
           --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
           --conf 'spark.kubernetes.driverEnv.GOOGLE_ACCOUNT_JSON={cfg["GOOGLE_ACCOUNT_JSON"]}' \
-          --conf spark.kubernetes.driverEnv.GOOGLE_SHEET_ID={cfg["GOOGLE_SHEET_ID"]} \
+          --conf spark.kubernetes.driverEnv.DOWNTIMES_GOOGLE_SHEET_ID={cfg["DOWNTIMES_GOOGLE_SHEET_ID"]} \
           --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
           --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
           --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
@@ -121,8 +121,8 @@ cfg = get_connection_properties(silver_dag)
 # (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
 INGESTION_TASKS = [
-#    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","silver_jira_ingestion.py",  None),
-    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver_gestao_downtimes.py",  None),
+    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","silver_gestao_jira.py",  None),
+#    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver_gestao_downtimes.py",  None),
 ]
 
 tasks = [make_ingestion_task(cfg, *task) for task in INGESTION_TASKS]
