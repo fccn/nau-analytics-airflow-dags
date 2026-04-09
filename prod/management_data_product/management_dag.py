@@ -19,7 +19,7 @@ def get_connection_properties(dag: DAG) -> dict:
             "docker_image": Variable.get("management_docker_image"),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON":google_string_connection.password,
+            "GOOGLE_ACCOUNT_JSON": base64.b64encode(json.dumps(json.loads(google_string_connection.password)).encode()).decode(),
             "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
             "DOWNTIMES_GOOGLE_SHEET_ID":Variable.get("DOWNTIMES_GOOGLE_SHEET_ID"),
             "S3_ACCESS_KEY": s3_conn.login,
