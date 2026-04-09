@@ -10,18 +10,17 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
+        s3_conn = Connection.get("s3_prod_connection")
+        iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
         google_string_connection = Connection.get("google_account")
         return {
             "dag": dag,
-            "docker_image": Variable.get("management_docker_image").strip(),
+            "docker_image": Variable.get("management_docker_image"),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON": base64.b64encode(json.dumps(json.loads(google_string_connection.password)).encode()).decode(),
-            "GOOGLE_SHEET_ID": base64.b64encode(Variable.get("JIRA_GOOGLE_SHEET_ID").encode()).decode(),
-            "DOWNTIMES_GOOGLE_SHEET_ID": base64.b64encode(Variable.get("DOWNTIMES_GOOGLE_SHEET_ID").encode()).decode(),
+            "GOOGLE_ACCOUNT_JSON":google_string_connection.password,
+            "DOWNTIMES_GOOGLE_SHEET_ID":Variable.get("DOWNTIMES_GOOGLE_SHEET_ID"),
             "S3_ACCESS_KEY": s3_conn.login,
             "S3_SECRET_KEY": s3_conn.password,
             "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
