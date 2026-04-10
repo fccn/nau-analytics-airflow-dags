@@ -44,7 +44,7 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image: str | None = None) -> KubernetesPodOperator:
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, executor_instances: int = 1, pod_image: str | None = None) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
 
     driver_memory = "8g"
@@ -74,7 +74,7 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
           --conf spark.driver.cores=2 \
           --conf spark.driver.memory={driver_memory} \
           --conf spark.driver.memoryOverhead={memory_overhead} \
-          --conf spark.executor.instances=1 \
+          --conf spark.executor.instances={executor_instances} \
           --conf spark.executor.cores={executor_cores} \
           --conf spark.executor.memory={executor_memory} \
           --conf spark.executor.memoryOverhead={memory_overhead} \
@@ -137,12 +137,12 @@ gold_dag = DAG(
 cfg = get_connection_properties(gold_dag)
 
 dim_time_task                     = make_gold_operator(cfg, "dim_time_gold",                   "gold_dim_time.py",                  executor_cores=1)
-dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py")
+dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py", executor_instances = 2)
 dim_organization_task             = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
-dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
-fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
-fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
-fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
-fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold","gold_fact_course_enrollment_d.py")
+dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py", executor_instances = 2)
+fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py", executor_instances = 2)
+fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py", executor_instances = 2)
+fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py", executor_instances = 2)
+fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold","gold_fact_course_enrollment_d.py", executor_instances = 2)
 
 dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task  # type: ignore
