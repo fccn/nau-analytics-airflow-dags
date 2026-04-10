@@ -144,5 +144,6 @@ fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_
 fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
 fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
 fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold","gold_fact_course_enrollment_d.py", executor_instances = 2)
+gold_reporting_agg_tables_task = make_gold_operator(cfg, "gold_reporting_agg_tables", "gold_reporting_agg_tables.py", executor_instances = 2)
 
-dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task  # type: ignore
+dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> gold_reporting_agg_tables_task  # type: ignore
