@@ -1,10 +1,9 @@
 from airflow import DAG  # type: ignore
 from datetime import datetime
+from typing import Optional
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
 from kubernetes.client import V1ResourceRequirements
-
-_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 
 def get_connection_properties(dag: DAG) -> dict:
@@ -40,11 +39,11 @@ def get_connection_properties(dag: DAG) -> dict:
             "GOLD_ICEBERG_CATALOG_NAME": iceberg_extra.get("gold_iceberg_catalog_name"),
             "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
         }
-    except Exception:
-        raise Exception(f"Could not get the variables or secrets: {Exception}")
+    except Exception as e:
+        raise Exception(f"Could not get the variables or secrets: {e}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, executor_instances: int = 1, pod_image: str | None = None) -> KubernetesPodOperator:
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, executor_instances: int = 1, pod_image: Optional[str] = None) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
 
     driver_memory = "8g"
@@ -121,7 +120,6 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
 
 default_args = {
     "start_date": datetime(2023, 1, 1),
-    "catchup": False,
     "email": [],
     "email_on_failure": False,
     "email_on_retry": False,
@@ -131,19 +129,49 @@ gold_dag = DAG(
     dag_id="gold_dag",
     default_args=default_args,
     schedule="0 5 * * *",
+    catchup=False,
     tags=["gold_table_transform", "prod"],
 )
 
 cfg = get_connection_properties(gold_dag)
 
-dim_time_task                     = make_gold_operator(cfg, "dim_time_gold",                   "gold_dim_time.py",                  executor_cores=1)
-dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py",                  executor_instances = 2)
-dim_organization_task             = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
-dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
-fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
-fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
-fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
-fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold","gold_fact_course_enrollment_d.py", executor_instances = 2)
-gold_reporting_agg_tables_task = make_gold_operator(cfg, "gold_reporting_agg_tables", "gold_reporting_agg_tables.py", executor_instances = 2)
+# ── Task definitions ──────────────────────────────────────────────────────────
+dim_time_task                     = make_gold_operator(cfg, "dim_time_gold",                    "gold_dim_time.py",                  executor_cores=1)
+dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                    "gold_dim_user.py",                  executor_instances=2)
+dim_organization_task             = make_gold_operator(cfg, "dim_organization_gold",             "gold_dim_organization.py")
+dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",           "gold_dim_course_edition.py")
+fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",           "gold_fact_certificate_d.py")
+fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",          "gold_fact_student_grades.py")
+fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",    "gold_fact_course_edition_daily.py")
+fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py",  executor_instances=2)
+gold_reporting_agg_tables_task    = make_gold_operator(cfg, "gold_reporting_agg_tables",         "gold_reporting_agg_tables.py",      executor_instances=3)
 
-dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> gold_reporting_agg_tables_task  # type: ignore
+# ── Dependency graph ──────────────────────────────────────────────────────────
+#
+#  dim_time ──────────────────────────────────────────────────────────────────┐
+#  dim_user ──────────────────────────────────────────────┐                  │
+#  dim_organization ──► dim_course_edition ───────────────┤                  │
+#                                                         ▼                  │
+#                              fact_certificate_d ─────────────────────────┐ │
+#                              fact_student_grades ──────────────────────┐ │ │
+#                              fact_course_edition_daily ──────────────┐ │ │ │
+#                              fact_course_enrollment_daily ──────────┐│ │ │ │
+#                                                                     ▼▼ ▼ ▼ ▼
+#                                                         gold_reporting_agg_tables
+#
+# Level 1: dim_course_edition needs dim_organization
+dim_organization_task >> dim_course_edition_task
+
+# Level 2: facts need dim_user + dim_course_edition
+[dim_user_task, dim_course_edition_task] >> fact_certificate_d_task
+[dim_user_task, dim_course_edition_task] >> fact_student_grades_task
+[dim_course_edition_task, dim_time_task] >> fact_course_edition_daily_task
+[dim_user_task, dim_course_edition_task] >> fact_course_enrollment_daily_task
+
+# Level 3: aggregations need all facts
+[
+    fact_certificate_d_task,
+    fact_student_grades_task,
+    fact_course_edition_daily_task,
+    fact_course_enrollment_daily_task,
+] >> gold_reporting_agg_tables_task  # type: ignore
