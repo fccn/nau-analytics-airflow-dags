@@ -43,7 +43,14 @@ def get_connection_properties(dag: DAG) -> dict:
         raise Exception(f"Could not get the variables or secrets: {e}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, executor_instances: int = 1, pod_image: Optional[str] = None) -> KubernetesPodOperator:
+def make_gold_operator(
+    cfg: dict,
+    name: str,
+    script: str,
+    executor_cores: int = 2,
+    executor_instances: int = 1,
+    pod_image: Optional[str] = None,
+) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
 
     driver_memory = "8g"
@@ -55,9 +62,15 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
         service_account_name="spark-role",
         image=image,
         startup_timeout_seconds=600,
+        # FIX 1: Raised the Airflow submit-pod memory limit from 1Gi → 2Gi.
+        # The 1Gi limit was dangerously close to what spark-submit needs to
+        # bootstrap on a large cluster. If the pod was OOM-killed by Kubernetes
+        # before Spark exited, Airflow would mark the task failed even if Spark
+        # completed successfully. CPU raised to 2 cores to keep the submit
+        # process responsive during long Spark runs.
         container_resources=V1ResourceRequirements(
             requests={"cpu": "500m", "memory": "512Mi"},
-            limits={"cpu": "1", "memory": "1Gi"},
+            limits={"cpu": "2", "memory": "2Gi"},
         ),
         cmds=["/bin/bash", "-c"],
         arguments=[
@@ -136,15 +149,86 @@ gold_dag = DAG(
 cfg = get_connection_properties(gold_dag)
 
 # ── Task definitions ──────────────────────────────────────────────────────────
-dim_time_task                     = make_gold_operator(cfg, "dim_time_gold",                    "gold_dim_time.py",                  executor_cores=1)
-dim_user_task                     = make_gold_operator(cfg, "dim_user_gold",                    "gold_dim_user.py",                  executor_instances=2)
-dim_organization_task             = make_gold_operator(cfg, "dim_organization_gold",             "gold_dim_organization.py")
-dim_course_edition_task           = make_gold_operator(cfg, "dim_course_edition_gold",           "gold_dim_course_edition.py")
-fact_certificate_d_task           = make_gold_operator(cfg, "fact_certificate_d_gold",           "gold_fact_certificate_d.py")
-fact_student_grades_task          = make_gold_operator(cfg, "fact_student_grades_gold",          "gold_fact_student_grades.py")
-fact_course_edition_daily_task    = make_gold_operator(cfg, "fact_course_edition_daily_gold",    "gold_fact_course_edition_daily.py")
-fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py",  executor_instances=2)
-gold_reporting_agg_tables_task    = make_gold_operator(cfg, "gold_reporting_agg_tables",         "gold_reporting_agg_tables.py",      executor_instances=3)
+#
+# Resource sizing rationale:
+#
+#   Total task slots = executor_instances × executor_cores
+#
+#   The compaction phase (rewrite_data_files) is the dominant cost for the two
+#   heaviest tasks. The Python scripts now set max-concurrent-file-group-rewrites=20,
+#   so those tasks need at least 20 task slots to run compaction groups in parallel.
+#   Giving them more slots also helps the CTAS / partition-overwrite write phase.
+#
+#   Memory is NOT the bottleneck — logs showed 4.6 GiB free on every executor
+#   throughout both jobs, so executor_memory stays at 8g.
+#
+#   Tasks that are lightweight (dim tables, simple facts) keep minimal resources
+#   so they don't hold Kubernetes node capacity unnecessarily.
+
+# Light-weight dimension tables — 1 executor is sufficient.
+dim_time_task = make_gold_operator(
+    cfg, "dim_time_gold", "gold_dim_time.py",
+    executor_cores=1, executor_instances=1,
+)
+dim_organization_task = make_gold_operator(
+    cfg, "dim_organization_gold", "gold_dim_organization.py",
+    executor_cores=1, executor_instances=1,
+)
+dim_course_edition_task = make_gold_operator(
+    cfg, "dim_course_edition_gold", "gold_dim_course_edition.py",
+    executor_cores=2, executor_instances=1,
+)
+
+# FIX 2: dim_user dropped from executor_instances=2 → 1.
+# It's an SCD2 dimension that completes quickly regardless of instance count.
+# The extra executor was wasted capacity that is better reserved for the
+# fact and aggregation tasks below.
+dim_user_task = make_gold_operator(
+    cfg, "dim_user_gold", "gold_dim_user.py",
+    executor_cores=2, executor_instances=1,
+)
+
+# Medium-weight fact tables — 2 executors (8 slots) is appropriate.
+fact_certificate_d_task = make_gold_operator(
+    cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
+    executor_cores=2, executor_instances=2,
+)
+fact_student_grades_task = make_gold_operator(
+    cfg, "fact_student_grades_gold", "gold_fact_student_grades.py",
+    executor_cores=2, executor_instances=2,
+)
+fact_course_edition_daily_task = make_gold_operator(
+    cfg, "fact_course_edition_daily_gold", "gold_fact_course_edition_daily.py",
+    executor_cores=2, executor_instances=2,
+)
+
+# FIX 3: fact_course_enrollment_daily scaled up from executor_instances=2 → 4,
+# executor_cores default (2) → 4. Total slots: 4×4 = 16.
+#
+# This task had 2,672 Iceberg file groups to compact with only 4 task slots
+# (2 instances × 2 cores), making the compaction almost entirely serial.
+# With max-concurrent-file-group-rewrites=20 set in the Python script, we need
+# at least 20 slots for that to have any effect. 16 slots is a safe step up
+# that fits within a typical node's capacity without over-provisioning; tune
+# to 20+ (e.g. instances=5, cores=4) if compaction is still the bottleneck.
+fact_course_enrollment_daily_task = make_gold_operator(
+    cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py",
+    executor_cores=4, executor_instances=4,
+)
+
+# FIX 4: gold_reporting_agg_tables scaled from executor_instances=3 (effective 2),
+# executor_cores=2 → executor_instances=6, executor_cores=4. Total slots: 6×4 = 24.
+#
+# The original allocation gave only 4 usable task slots (the 3rd executor appeared
+# to be a late Kubernetes scheduler arrival), capping max compaction parallelism
+# at 4 regardless of the max-concurrent-file-group-rewrites setting. This task
+# processes 1,182+ file groups across two aggregation tables; 24 slots allows
+# the compaction to run 20 groups truly in parallel, plus leaves headroom for
+# the concurrent partition-overwrite write phase.
+gold_reporting_agg_tables_task = make_gold_operator(
+    cfg, "gold_reporting_agg_tables", "gold_reporting_agg_tables.py",
+    executor_cores=4, executor_instances=6,
+)
 
 # ── Dependency graph ──────────────────────────────────────────────────────────
 #
@@ -158,7 +242,7 @@ gold_reporting_agg_tables_task    = make_gold_operator(cfg, "gold_reporting_agg_
 #                              fact_course_enrollment_daily ──────────┐│ │ │ │
 #                                                                     ▼▼ ▼ ▼ ▼
 #                                                         gold_reporting_agg_tables
-#
+
 # Level 1: dim_course_edition needs dim_organization
 dim_organization_task >> dim_course_edition_task
 
