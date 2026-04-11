@@ -2,6 +2,7 @@ from airflow import DAG  # type: ignore
 from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator  # type: ignore
 from kubernetes.client import V1ResourceRequirements
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
@@ -164,3 +165,11 @@ tasks = [make_ingestion_task(cfg, *task) for task in INGESTION_TASKS]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
+
+trigger_silver = TriggerDagRunOperator(
+    task_id="trigger_silver_dag",
+    trigger_dag_id="silver_dag",
+    dag=bronze_dag,
+)
+
+tasks[-1] >> trigger_silver  # type: ignore

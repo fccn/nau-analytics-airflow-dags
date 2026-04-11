@@ -2,6 +2,7 @@ from airflow import DAG  # type: ignore
 from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator  # type: ignore
 from kubernetes.client import V1ResourceRequirements
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
@@ -136,7 +137,7 @@ default_args = {
 silver_dag = DAG(
     dag_id="silver_dag",
     default_args=default_args,
-    schedule="0 4 * * *",
+    schedule=None,
     tags=["silver_table_clean", "prod"],
 )
 
@@ -160,3 +161,11 @@ tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
+
+trigger_gold = TriggerDagRunOperator(
+    task_id="trigger_gold_dag",
+    trigger_dag_id="gold_dag",
+    dag=silver_dag,
+)
+
+tasks[-1] >> trigger_gold  # type: ignore

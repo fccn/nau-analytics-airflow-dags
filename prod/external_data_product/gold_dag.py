@@ -128,7 +128,7 @@ default_args = {
 gold_dag = DAG(
     dag_id="gold_dag",
     default_args=default_args,
-    schedule="0 5 * * *",
+    schedule=None,
     catchup=False,
     tags=["gold_table_transform", "prod"],
 )
