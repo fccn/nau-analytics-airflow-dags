@@ -55,7 +55,12 @@ def make_gold_operator(
 
     driver_memory = "8g"
     executor_memory = "8g"
-    memory_overhead = "2g"
+    # FIX 8 (NEW): Increased memoryOverhead from 2g → 4g.
+    # The original 2g overhead was insufficient for large shuffle operations,
+    # causing repeated OOM kills (exit code 137) on executors during the
+    # fact_conclusion_rate_agg and enrollments_vs_certificates_agg writes.
+    # Kubernetes total per executor = executor_memory + memoryOverhead = 12g.
+    memory_overhead = "4g"
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -161,6 +166,8 @@ cfg = get_connection_properties(gold_dag)
 #
 #   Memory is NOT the bottleneck — logs showed 4.6 GiB free on every executor
 #   throughout both jobs, so executor_memory stays at 8g.
+#   FIX 8: memoryOverhead raised from 2g → 4g to prevent OOM kills during
+#   large shuffle operations (Kubernetes limit = 8g + 4g = 12g per executor).
 #
 #   Tasks that are lightweight (dim tables, simple facts) keep minimal resources
 #   so they don't hold Kubernetes node capacity unnecessarily.
