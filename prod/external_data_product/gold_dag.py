@@ -138,9 +138,9 @@ def make_gold_operator(
 
 default_args = {
     "start_date": datetime(2023, 1, 1),
-    "email": [],
-    "email_on_failure": False,
-    "email_on_retry": False,
+    "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
+    "email_on_failure": True,
+    "email_on_retry": True,
 }
 
 gold_dag = DAG(
