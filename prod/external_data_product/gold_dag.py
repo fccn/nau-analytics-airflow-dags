@@ -38,6 +38,8 @@ def get_connection_properties(dag: DAG) -> dict:
             "GOLD_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("gold_iceberg_database_catalog_name"),
             "GOLD_ICEBERG_CATALOG_NAME": iceberg_extra.get("gold_iceberg_catalog_name"),
             "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
+            "TABLES_TO_RUN": Variable.get("TABLES_TO_RUN", default_var=""),
+            "CACHE_FACT_TABLES": Variable.get("CACHE_FACT_TABLES", default_var="true"),
         }
     except Exception as e:
         raise Exception(f"Could not get the variables or secrets: {e}")
@@ -121,6 +123,8 @@ def make_gold_operator(
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
+          --conf spark.kubernetes.driverEnv.TABLES_TO_RUN={cfg["TABLES_TO_RUN"]} \
+          --conf spark.kubernetes.driverEnv.CACHE_FACT_TABLES={cfg["CACHE_FACT_TABLES"]} \
           --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
