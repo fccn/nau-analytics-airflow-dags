@@ -155,6 +155,7 @@ SILVER_TASKS = [
     ("organizations_organization_silver",      "silver_organizations_organization.py",      _LEGACY_IMAGE),
     ("student_courseenrollment_silver",        "silver_student_courseenrollment.py",        _LEGACY_IMAGE),
     ("student_courseenrollment_history_silver","silver_student_courseenrollment_history.py",_LEGACY_IMAGE),
+    ("student_courseaccessrole_silver",        "silver_student_courseaccessrole.py",        _LEGACY_IMAGE),
 ]
 
 tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]

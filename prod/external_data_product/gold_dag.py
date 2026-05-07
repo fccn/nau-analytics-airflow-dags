@@ -199,6 +199,13 @@ dim_user_task = make_gold_operator(
     executor_cores=2, executor_instances=1,
 )
 
+# Audit lookup table (full refresh of student_courseaccessrole snapshot).
+# Tiny payload, no joins — minimal resources and no upstream/downstream deps.
+dim_course_access_role_task = make_gold_operator(
+    cfg, "dim_course_access_role_gold", "gold_dim_course_access_role.py",
+    executor_cores=1, executor_instances=1,
+)
+
 # Medium-weight fact tables — 2 executors (8 slots) is appropriate.
 fact_certificate_d_task = make_gold_operator(
     cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
