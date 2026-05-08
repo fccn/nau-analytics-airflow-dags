@@ -28,7 +28,7 @@ def task_fail_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
         
     }
     
