@@ -26,38 +26,8 @@ def task_fail_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": "🚨 **Airflow Task Failed!**",
-                            "wrap": True,
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "size": "Medium"
-                        },
-                        {
-                            "type": "FactSet",
-                            "facts": [
-                                {"title": "DAG", "value": dag_id},
-                                {"title": "Task", "value": task_id},
-                                {"title": "Run ID", "value": run_id},
-                                {"title": "Execution Time", "value": str(execution_time)},
-                                {"title": "Try", "value": str(try_number)},
-                                {"title": "Error", "value": error}
-                            ]
-                        }
-                    ]
-                }
-            }
-        ]
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+        
     }
     
     resp = requests.post(

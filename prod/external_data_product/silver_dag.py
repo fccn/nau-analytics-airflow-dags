@@ -28,38 +28,8 @@ def task_fail_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": "🚨 **Airflow Task Failed!**",
-                            "wrap": True,
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "size": "Medium"
-                        },
-                        {
-                            "type": "FactSet",
-                            "facts": [
-                                {"title": "DAG", "value": dag_id},
-                                {"title": "Task", "value": task_id},
-                                {"title": "Run ID", "value": run_id},
-                                {"title": "Execution Time", "value": str(execution_time)},
-                                {"title": "Try", "value": str(try_number)},
-                                {"title": "Error", "value": error}
-                            ]
-                        }
-                    ]
-                }
-            }
-        ]
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+        
     }
     
     resp = requests.post(
@@ -73,7 +43,7 @@ def task_fail_alert(context):
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
-def task_sucess_alert(context):
+def dag_sucess_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
     ti = context["task_instance"]
     dag_id = ti.dag_id
@@ -84,37 +54,8 @@ def task_sucess_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": "✔️ **Airflow Task Completed Successfully!**",
-                            "wrap": True,
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "size": "Medium"
-                        },
-                        {
-                            "type": "FactSet",
-                            "facts": [
-                                {"title": "DAG", "value": dag_id},
-                                {"title": "Task", "value": task_id},
-                                {"title": "Run ID", "value": run_id},
-                                {"title": "Execution Time", "value": str(execution_time)},
-                                {"title": "Try", "value": str(try_number)}
-                            ]
-                        }
-                    ]
-                }
-            }
-        ]
+    "text": "✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+        
     }
     
     resp = requests.post(
@@ -252,14 +193,14 @@ default_args = {
     "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
     "email_on_failure": True,
     "email_on_retry": True,
-    "on_failure_callback":task_fail_alert,
-    "on_success_callback":task_sucess_alert
+    "on_failure_callback":task_fail_alert
 }
 
 silver_dag = DAG(
     dag_id="silver_dag",
     default_args=default_args,
     schedule=None,
+    on_success_callback=dag_sucess_alert,
     tags=["silver_table_clean", "prod"],
 )
 
