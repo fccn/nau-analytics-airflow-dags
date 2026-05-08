@@ -264,6 +264,8 @@ default_args = {
     "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
     "email_on_failure": True,
     "email_on_retry": True,
+    "on_failure_callback":task_fail_alert,
+    "on_success_callback":task_sucess_alert
 }
 
 gold_dag = DAG(
