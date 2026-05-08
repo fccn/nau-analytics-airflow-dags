@@ -3,10 +3,130 @@ from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator  # type: ignore
-from kubernetes.client import V1ResourceRequirements
+from kubernetes.client import V1ResourceRequirements #type:ignore
+import logging
+import requests #type: ignore
+_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the minimum level to log
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
+def task_fail_alert(context):
+    TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    task_id = ti.task_id
+    execution_time = getattr(ti, "start_date", "unknown")
+    run_id = getattr(ti, "run_id", "unknown")
+    try_number = getattr(ti, "try_number", "unknown")
+    error = str(context.get("exception", "No exception captured"))
+
+    message = {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                        {
+                            "type": "TextBlock",
+                            "text": "🚨 **Airflow Task Failed!**",
+                            "wrap": True,
+                            "weight": "Bolder",
+                            "color": "Attention",
+                            "size": "Medium"
+                        },
+                        {
+                            "type": "FactSet",
+                            "facts": [
+                                {"title": "DAG", "value": dag_id},
+                                {"title": "Task", "value": task_id},
+                                {"title": "Run ID", "value": run_id},
+                                {"title": "Execution Time", "value": str(execution_time)},
+                                {"title": "Try", "value": str(try_number)},
+                                {"title": "Error", "value": error}
+                            ]
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    
+    resp = requests.post(
+        TEAMS_WEBHOOK_URL,
+        json=message,
+        headers={"Content-Type": "application/json"},
+    )
+
+    if resp.status_code in (200, 202):
+        logging.info("Teams alert sent successfully")
+    else:
+        logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
+
+def task_sucess_alert(context):
+    TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    task_id = ti.task_id
+    execution_time = getattr(ti, "start_date", "unknown")
+    run_id = getattr(ti, "run_id", "unknown")
+    try_number = getattr(ti, "try_number", "unknown")
+    error = str(context.get("exception", "No exception captured"))
+
+    message = {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.4",
+                    "body": [
+                        {
+                            "type": "TextBlock",
+                            "text": "✔️ **Airflow Task Completed Successfully!**",
+                            "wrap": True,
+                            "weight": "Bolder",
+                            "color": "Attention",
+                            "size": "Medium"
+                        },
+                        {
+                            "type": "FactSet",
+                            "facts": [
+                                {"title": "DAG", "value": dag_id},
+                                {"title": "Task", "value": task_id},
+                                {"title": "Run ID", "value": run_id},
+                                {"title": "Execution Time", "value": str(execution_time)},
+                                {"title": "Try", "value": str(try_number)}
+                            ]
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    
+    resp = requests.post(
+        TEAMS_WEBHOOK_URL,
+        json=message,
+        headers={"Content-Type": "application/json"},
+    )
+
+    if resp.status_code in (200, 202):
+        logging.info("Teams alert sent successfully")
+    else:
+        logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
