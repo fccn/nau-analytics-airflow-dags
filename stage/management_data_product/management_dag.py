@@ -40,7 +40,7 @@ def task_fail_alert(context):
                         {
                             "type": "TextBlock",
                             "text": "🚨 **Airflow Task Failed!**",
-                            "wrap": True,
+                            "wrap": "True",
                             "weight": "Bolder",
                             "color": "Attention",
                             "size": "Medium"
@@ -48,12 +48,12 @@ def task_fail_alert(context):
                         {
                             "type": "FactSet",
                             "facts": [
-                                {"title": "DAG", "value": dag_id},
-                                {"title": "Task", "value": task_id},
-                                {"title": "Run ID", "value": run_id},
-                                {"title": "Execution Time", "value": str(execution_time)},
-                                {"title": "Try", "value": str(try_number)},
-                                {"title": "Error", "value": error}
+                                {"title": "DAG", "value": f"{str(dag_id)}"},
+                                {"title": "Task", "value": f"{str(task_id)}"},
+                                {"title": "Run ID", "value": f"{str(run_id)}"},
+                                {"title": "Execution Time", "value": f"{str(execution_time)}"},
+                                {"title": "Try", "value": f"{str(try_number)}"},
+                                {"title": "Error", "value": f"{error}"}
                             ]
                         }
                     ]
