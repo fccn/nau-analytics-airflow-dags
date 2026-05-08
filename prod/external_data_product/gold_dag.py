@@ -23,7 +23,6 @@ def task_fail_alert(context):
     execution_time = getattr(ti, "start_date", "unknown")
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
-    error = str(context.get("exception", "No exception captured"))
 
     message = {
     "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
@@ -45,11 +44,10 @@ def dag_sucess_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
     ti = context["task_instance"]
     dag_id = ti.dag_id
-    task_id = ti.task_id
     execution_time = getattr(ti, "start_date", "unknown")
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
-    error = str(context.get("exception", "No exception captured"))
+
 
     message = {
     "text": f"✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
