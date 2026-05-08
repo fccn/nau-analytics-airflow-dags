@@ -52,7 +52,7 @@ def dag_sucess_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-    "text": "✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
         
     }
     
@@ -66,7 +66,7 @@ def dag_sucess_alert(context):
         logging.info("Teams alert sent successfully")
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
-        
+
 def get_connection_properties(dag: DAG) -> dict:
     try:
         mysql_conn = Connection.get("sql_source_prod_connection")

@@ -54,7 +54,7 @@ def dag_sucess_alert(context):
     error = str(context.get("exception", "No exception captured"))
 
     message = {
-    "text": "✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
         
     }
     
