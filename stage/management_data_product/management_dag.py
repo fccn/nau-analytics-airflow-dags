@@ -5,7 +5,9 @@ import json
 import base64
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
-from airflow.utils.email import send_email_smtp #type: ignore
+import smtplib
+from email.message import EmailMessage
+
 import logging
 
 # Configure logging
@@ -18,6 +20,12 @@ _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 
 
 def email_fail_alert(context):
+    smtp_conn = Connection.get("smtp_error_email")
+    smth_host = smtp_conn.host
+    smtp_port = smtp_conn.port
+    sender = smtp_conn.extra_dejson.get("from_email")
+    receiver = smtp_conn.extra_dejson.get("to")
+    cc_list = smtp_conn.extra_dejson.get("cc1", [])
     ti = context["task_instance"]
     dag_id = ti.dag_id
     task_id = ti.task_id
@@ -27,23 +35,32 @@ def email_fail_alert(context):
     env = "stage"
 
     subject = f"🚨 Airflow Task Failed: {dag_id}.{task_id}"
-    html_content = f"""
-    <h3>🚨 Airflow Task Failed!</h3>
-    <ul>
-      <li><b>DAG:</b> {dag_id}</li>
-      <li><b>Task:</b> {task_id}</li>
-      <li><b>Run ID:</b> {run_id}</li>
-      <li><b>Execution Time:</b> {execution_time}</li>
-      <li><b>environment:</b> {env}</li>
-    </ul>
+    content = f"""
+    🚨 Airflow Task Failed!
+    
+       - DAG: {dag_id}
+       - Task:{task_id}
+       - Run ID: {run_id}
+       - Execution Time: {execution_time}
+       - environment: {env}
     """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(cc_list)
+    msg["Cc"] = ", ".join(cc_list)
+    msg.set_content(content)
+    logging.info("Sending Airflow failure alert email")
+    try:
+        server = smtplib.SMTP(smth_host, smtp_port, timeout=10)
+        server.ehlo()
+        logging.info("SMTP connection successful")
+        server.send_message(msg)
+        logging.info("email sent successful")
+        server.quit()
+    except Exception as e:
+        logging.error(f"Connection failed: {e}")
 
-    send_email_smtp(
-        to=Variable.get("cc1"),
-        subject=subject,
-        html_content=html_content,
-        conn_id="smtp_error_email", 
-    )
 
 
 
