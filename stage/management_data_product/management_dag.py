@@ -5,6 +5,7 @@ import json
 import base64
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+from airflow.utils.email import send_email_smtp #type: ignore
 import logging
 
 # Configure logging
@@ -14,6 +15,35 @@ logging.basicConfig(
 )
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+
+
+def email_fail_alert(context):
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    task_id = ti.task_id
+    run_id = getattr(ti, "run_id", "unknown")
+    execution_time = getattr(ti, "start_date", "unknown")
+
+    env = "stage"
+
+    subject = f"🚨 Airflow Task Failed: {dag_id}.{task_id}"
+    html_content = f"""
+    <h3>🚨 Airflow Task Failed!</h3>
+    <ul>
+      <li><b>DAG:</b> {dag_id}</li>
+      <li><b>Task:</b> {task_id}</li>
+      <li><b>Run ID:</b> {run_id}</li>
+      <li><b>Execution Time:</b> {execution_time}</li>
+      <li><b>environment:</b> {env}</li>
+    </ul>
+    """
+
+    send_email_smtp(
+        to=Variable.get("cc1"),
+        subject=subject,
+        html_content=html_content,
+        conn_id="smtp_error_email", 
+    )
 
 
 
@@ -146,7 +176,7 @@ default_args = {
     "email": [],
     "email_on_failure": False,
     "email_on_retry": False,
-    "on_failure_callback":task_fail_alert
+    "on_failure_callback":email_fail_alert
 }
 
 bronze_dag = DAG(
