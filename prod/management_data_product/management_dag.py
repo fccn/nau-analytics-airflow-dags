@@ -85,8 +85,8 @@ def task_fail_alert(context):
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
 def send_error_alerts(context):
-    email_fail_alert(context=context)
-    task_fail_alert(context=context)
+    email_sucess_alert(context=context)
+    dag_sucess_alert(context=context)
 
 
 def email_sucess_alert(context):
