@@ -193,7 +193,7 @@ def make_misc_task(
         cmds=["/bin/bash", "-c"],
         arguments=[
             f"""
-            echo "hello" | return 0 
+            echo "hello" | exit 0 
             """
         ],
         name=task_name,
