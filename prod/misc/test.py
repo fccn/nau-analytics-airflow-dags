@@ -95,11 +95,17 @@ def task_fail_alert(context):
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
 def send_error_alerts(context):
-    email_fail_alert(context=context)
-    #task_fail_alert(context=context)
+    try:
+        email_fail_alert(context=context)
+    except Exception:
+        logging.exception("Email alert failed")
+    try:
+        task_fail_alert(context=context)
+    except Exception:
+        logging.exception("teams alert failed")
 
 
-def email_sucess_alert(context):
+def email_success_alert(context):
     smtp_conn = Connection.get("smtp_error_email")
     smth_host = smtp_conn.host
     smtp_port = smtp_conn.port
@@ -139,7 +145,7 @@ def email_sucess_alert(context):
     except Exception as e:
         logging.error(f"Connection failed: {e}")
 
-def dag_sucess_alert(context):
+def dag_success_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
     ti = context["task_instance"]
     dag_id = ti.dag_id
@@ -164,8 +170,15 @@ def dag_sucess_alert(context):
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
 def send_sucess_alerts(context):
-    email_sucess_alert(context=context)
-    #dag_sucess_alert(context=context)
+    try:
+        email_success_alert(context)
+    except Exception:
+        logging.exception("Email alert failed")
+
+    try:
+        dag_success_alert(context)
+    except Exception:
+        logging.exception("Teams alert failed")
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
@@ -211,7 +224,7 @@ default_args = {
     "email_on_failure": False,
     "email_on_retry": False,
     "on_failure_callback":send_error_alerts,
-    "on_success_callback":dag_sucess_alert,
+    "on_success_callback":send_sucess_alerts,
 }
 
 bronze_dag = DAG(
