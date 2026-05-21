@@ -32,7 +32,7 @@ def email_fail_alert(context):
     run_id = getattr(ti, "run_id", "unknown")
     execution_time = getattr(ti, "start_date", "unknown")
 
-    env = "stage"
+    env = Variable.get("ENVIRONMENT")
 
     subject = f"🚨 Airflow Task Failed: {dag_id}.{task_id}"
     content = f"""
@@ -73,9 +73,10 @@ def task_fail_alert(context):
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
     error = str(context.get("exception", "No exception captured"))
+    env = Variable.get("ENVIRONMENT")
 
     message = {
-    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n environment: {env}\n\n"
         
     }
     
@@ -89,6 +90,10 @@ def task_fail_alert(context):
         logging.info("Teams alert sent successfully")
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
+
+def send_error_alerts(context):
+    email_fail_alert(context=context)
+    task_fail_alert(context=context)
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
@@ -193,7 +198,7 @@ default_args = {
     "email": [],
     "email_on_failure": False,
     "email_on_retry": False,
-    "on_failure_callback":email_fail_alert
+    "on_failure_callback":send_error_alerts
 }
 
 bronze_dag = DAG(
