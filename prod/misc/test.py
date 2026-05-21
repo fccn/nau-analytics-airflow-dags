@@ -167,41 +167,6 @@ def send_sucess_alerts(context):
     email_sucess_alert(context=context)
     #dag_sucess_alert(context=context)
 
-def get_connection_properties(dag: DAG) -> dict:
-    try:
-        s3_conn = Connection.get("s3_stage_connection")
-        iceberg_conn = Connection.get("iceberg_stage_connection")
-        iceberg_extra = iceberg_conn.extra_dejson
-        google_string_connection = Connection.get("google_account")
-        return {
-            "dag": dag,
-            "docker_image": Variable.get("management_docker_image"),
-            "namespace": Variable.get("namespace"),
-            "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON": base64.b64encode(json.dumps(json.loads(google_string_connection.password)).encode()).decode(),
-            "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
-            "DOWNTIMES_GOOGLE_SHEET_ID": base64.b64encode(Variable.get("DOWNTIMES_GOOGLE_SHEET_ID").encode()).decode(),
-            "S3_ACCESS_KEY": s3_conn.login,
-            "S3_SECRET_KEY": s3_conn.password,
-            "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
-            "ICEBERG_CATALOG_HOST": iceberg_conn.host,
-            "ICEBERG_CATALOG_PORT": iceberg_conn.port,
-            "ICEBERG_CATALOG_USER": iceberg_conn.login,
-            "ICEBERG_CATALOG_PASSWORD": iceberg_conn.password,
-            "BRONZE_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_database_catalog_name"),
-            "BRONZE_ICEBERG_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_catalog_name"),
-            "BRONZE_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("bronze_iceberg_catalog_warehouse"),
-            "SILVER_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("silver_iceberg_database_catalog_name"),
-            "SILVER_ICEBERG_CATALOG_NAME": iceberg_extra.get("silver_iceberg_catalog_name"),
-            "SILVER_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("silver_iceberg_catalog_warehouse"),
-            "GOLD_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("gold_iceberg_database_catalog_name"),
-            "GOLD_ICEBERG_CATALOG_NAME": iceberg_extra.get("gold_iceberg_catalog_name"),
-            "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
-        }
-    except Exception:
-        raise Exception(f"Could not get the variables or secrets: {Exception}")
-
-
 def make_misc_task(
     cfg: dict,
     task_name: str,
