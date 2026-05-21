@@ -115,7 +115,7 @@ def email_sucess_alert(context):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = receiver
+    msg["To"] = ", ".join(cc_list)
     msg["Cc"] = ", ".join(cc_list)
     msg.set_content(content)
     logging.info("Sending Airflow failure alert email")
