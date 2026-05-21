@@ -241,7 +241,7 @@ bronze_dag = DAG(
     dag_id="misc_dag",
     default_args=default_args,
     schedule=None,
-    tags=["management_DAG_ingestion", "prod", "management_data_product"],
+    tags=[ "prod", "misc"],
 )
 
 cfg = get_connection_properties(bronze_dag)
