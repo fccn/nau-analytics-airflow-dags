@@ -125,7 +125,7 @@ def email_sucess_alert(context):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = ", ".join(cc_list)
+    msg["To"] = receiver
     msg["Cc"] = ", ".join(cc_list)
     msg.set_content(content)
     logging.info("Sending Airflow failure alert email")
@@ -211,7 +211,7 @@ default_args = {
     "email_on_failure": False,
     "email_on_retry": False,
     "on_failure_callback":send_error_alerts,
-    "on_success_callback":send_sucess_alerts,
+    "on_success_callback":dag_sucess_alert,
 }
 
 bronze_dag = DAG(
