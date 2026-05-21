@@ -6,14 +6,56 @@ from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperato
 from kubernetes.client import V1ResourceRequirements #type:ignore
 import logging
 import requests #type: ignore
+import smtplib
+from email.message import EmailMessage
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Set the minimum level to log
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+# Configure logging
+def email_fail_alert(context):
+    smtp_conn = Connection.get("smtp_error_email")
+    smth_host = smtp_conn.host
+    smtp_port = smtp_conn.port
+    sender = smtp_conn.extra_dejson.get("from_email")
+    receiver = smtp_conn.extra_dejson.get("to")
+    cc_list = smtp_conn.extra_dejson.get("cc1", [])
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    task_id = ti.task_id
+    run_id = getattr(ti, "run_id", "unknown")
+    execution_time = getattr(ti, "start_date", "unknown")
 
-_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+    env = Variable.get("ENVIRONMENT")
+
+    subject = f"🚨 Airflow Task Failed: {dag_id}.{task_id}"
+    content = f"""
+    🚨 Airflow Task Failed!
+    
+       - DAG: {dag_id}
+       - Task:{task_id}
+       - Run ID: {run_id}
+       - Execution Time: {execution_time}
+       - environment: {env}
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = receiver
+    msg["Cc"] = ", ".join(cc_list)
+    msg.set_content(content)
+    logging.info("Sending Airflow failure alert email")
+    try:
+        server = smtplib.SMTP(smth_host, smtp_port, timeout=10)
+        server.ehlo()
+        logging.info("SMTP connection successful")
+        server.send_message(msg)
+        logging.info("email sent successful")
+        server.quit()
+    except Exception as e:
+        logging.error(f"Connection failed: {e}")
+
 
 def task_fail_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
@@ -23,9 +65,9 @@ def task_fail_alert(context):
     execution_time = getattr(ti, "start_date", "unknown")
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
-
+    env = Variable.get("ENVIRONMENT")
     message = {
-    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n environment: {env}\n\n"
         
     }
     
@@ -40,17 +82,67 @@ def task_fail_alert(context):
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
-def dag_sucess_alert(context):
+def send_error_alerts(context):
+    try:
+        email_fail_alert(context=context)
+    except Exception:
+        logging.exception("Email alert failed")
+    try:
+        task_fail_alert(context=context)
+    except Exception:
+        logging.exception("teams alert failed")
+
+
+def email_success_alert(context):
+    smtp_conn = Connection.get("smtp_error_email")
+    smth_host = smtp_conn.host
+    smtp_port = smtp_conn.port
+    sender = smtp_conn.extra_dejson.get("from_email")
+    receiver = smtp_conn.extra_dejson.get("to")
+    cc_list = smtp_conn.extra_dejson.get("cc1", [])
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    run_id = getattr(ti, "run_id", "unknown")
+    execution_time = getattr(ti, "start_date", "unknown")
+
+    env = Variable.get("ENVIRONMENT")
+
+    subject = f"✔️ Airflow DAG Completed Successfully!: {dag_id}"
+    content = f"""
+    ✔️ Airflow DAG Completed Successfully!
+    
+       - DAG: {dag_id}
+       - Run ID: {run_id}
+       - Execution Time: {execution_time}
+       - environment: {env}
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = receiver
+    msg["Cc"] = ", ".join(cc_list)
+    msg.set_content(content)
+    logging.info("Sending Airflow failure alert email")
+    try:
+        server = smtplib.SMTP(smth_host, smtp_port, timeout=10)
+        server.ehlo()
+        logging.info("SMTP connection successful")
+        server.send_message(msg)
+        logging.info("email sent successful")
+        server.quit()
+    except Exception as e:
+        logging.error(f"Connection failed: {e}")
+
+def dag_success_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
     ti = context["task_instance"]
     dag_id = ti.dag_id
     execution_time = getattr(ti, "start_date", "unknown")
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
-
-
+    env = Variable.get("ENVIRONMENT")
     message = {
-    "text": f"✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n"
+    "text": f"✔️ **Airflow DAG Completed Successfully!** \n\n **DAG:** {dag_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n environment: {env}\n\n"
         
     }
     
@@ -65,6 +157,16 @@ def dag_sucess_alert(context):
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
+def send_sucess_alerts(context):
+    try:
+        email_success_alert(context)
+    except Exception:
+        logging.exception("Email alert failed")
+
+    try:
+        dag_success_alert(context)
+    except Exception:
+        logging.exception("Teams alert failed")
 def get_connection_properties(dag: DAG) -> dict:
     try:
         mysql_conn = Connection.get("sql_source_prod_connection")
@@ -204,7 +306,7 @@ default_args = {
     "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
     "email_on_failure": True,
     "email_on_retry": True,
-    "on_failure_callback":task_fail_alert
+    "on_failure_callback":send_error_alerts
 }
 
 gold_dag = DAG(
@@ -212,7 +314,7 @@ gold_dag = DAG(
     default_args=default_args,
     schedule=None,
     catchup=False,
-    on_success_callback=dag_sucess_alert,
+    on_success_callback=send_sucess_alerts,
     tags=["gold_table_transform", "prod"],
 )
 

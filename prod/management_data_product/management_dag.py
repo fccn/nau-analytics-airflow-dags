@@ -9,13 +9,11 @@ import requests #type: ignore
 import smtplib
 from email.message import EmailMessage
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Set the minimum level to log
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 def email_fail_alert(context):
     smtp_conn = Connection.get("smtp_error_email")
     smth_host = smtp_conn.host
@@ -85,11 +83,17 @@ def task_fail_alert(context):
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
 def send_error_alerts(context):
-    email_fail_alert(context=context)
-    task_fail_alert(context=context)
+    try:
+        email_fail_alert(context=context)
+    except Exception:
+        logging.exception("Email alert failed")
+    try:
+        task_fail_alert(context=context)
+    except Exception:
+        logging.exception("teams alert failed")
 
 
-def email_sucess_alert(context):
+def email_success_alert(context):
     smtp_conn = Connection.get("smtp_error_email")
     smth_host = smtp_conn.host
     smtp_port = smtp_conn.port
@@ -115,7 +119,7 @@ def email_sucess_alert(context):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = ", ".join(cc_list)
+    msg["To"] = receiver
     msg["Cc"] = ", ".join(cc_list)
     msg.set_content(content)
     logging.info("Sending Airflow failure alert email")
@@ -129,7 +133,7 @@ def email_sucess_alert(context):
     except Exception as e:
         logging.error(f"Connection failed: {e}")
 
-def dag_sucess_alert(context):
+def dag_success_alert(context):
     TEAMS_WEBHOOK_URL = Connection.get("WEBHOOK_URL").password
     ti = context["task_instance"]
     dag_id = ti.dag_id
@@ -153,9 +157,16 @@ def dag_sucess_alert(context):
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
-def send_sucess_alerts(context):
-    email_sucess_alert(context=context)
-    dag_sucess_alert(context=context)
+def send_success_alerts(context):
+    try:
+        email_success_alert(context)
+    except Exception:
+        logging.exception("Email alert failed")
+
+    try:
+        dag_success_alert(context)
+    except Exception:
+        logging.exception("Teams alert failed")
 def get_connection_properties(dag: DAG) -> dict:
     try:
         s3_conn = Connection.get("s3_prod_connection")
@@ -266,7 +277,7 @@ bronze_dag = DAG(
     dag_id="management_dag",
     default_args=default_args,
     schedule="0 1 * * *",
-    on_success_callback=send_sucess_alerts,
+    on_success_callback=send_success_alerts,
     tags=["management_DAG_ingestion", "prod", "management_data_product"],
 )
 
