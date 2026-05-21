@@ -167,6 +167,18 @@ def send_sucess_alerts(context):
     email_sucess_alert(context=context)
     #dag_sucess_alert(context=context)
 
+def get_connection_properties(dag: DAG) -> dict:
+    try:
+        return {
+            "dag": dag,
+            "docker_image": Variable.get("management_docker_image"),
+            "namespace": Variable.get("namespace"),
+            "ENVIRONMENT": Variable.get("ENVIRONMENT"),
+        }
+    except Exception:
+        raise Exception(f"Could not get the variables or secrets: {Exception}")
+
+
 def make_misc_task(
     cfg: dict,
     task_name: str,
