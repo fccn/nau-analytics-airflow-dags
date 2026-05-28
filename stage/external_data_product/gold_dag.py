@@ -41,6 +41,13 @@ def get_connection_properties(dag: DAG)->dict:
         config["GOLD_ICEBERG_CATALOG_NAME"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_name")
         config["GOLD_ICEBERG_CATALOG_WAREHOUSE"] = iceberg_catalog_conn.extra_dejson.get("gold_iceberg_catalog_warehouse")
 
+        superset_conn = Connection.get("superset_stage_connection")
+        config["SUPERSET_URL"] = superset_conn.host
+        config["SUPERSET_USERNAME"] = superset_conn.login
+        config["SUPERSET_PASSWORD"] = superset_conn.password
+        config["ACCESS_ROLE_TABLE"] = superset_conn.extra_dejson.get("access_role_table", "")
+        config["ALLOWED_DATABASES"] = superset_conn.extra_dejson.get("allowed_databases", "")
+
         config["ENVIRONMENT"] = Variable.get("ENVIRONMENT")
         return config
     except Exception:
@@ -123,6 +130,41 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
     )
 
 
+def make_rls_operator(cfg: dict, name: str, script: str) -> KubernetesPodOperator:
+    # apply_rls.py is a plain requests-based script, not Spark — it runs
+    # directly in a pod (python ...) rather than via spark-submit.
+    env_vars = {
+        "SUPERSET_URL": cfg["SUPERSET_URL"],
+        "SUPERSET_USERNAME": cfg["SUPERSET_USERNAME"],
+        "SUPERSET_PASSWORD": cfg["SUPERSET_PASSWORD"],
+    }
+    # Empty values are dropped so the script's own defaults apply.
+    if cfg["ACCESS_ROLE_TABLE"]:
+        env_vars["ACCESS_ROLE_TABLE"] = cfg["ACCESS_ROLE_TABLE"]
+    if cfg["ALLOWED_DATABASES"]:
+        env_vars["ALLOWED_DATABASES"] = cfg["ALLOWED_DATABASES"]
+
+    return KubernetesPodOperator(
+        namespace=cfg["namespace"],
+        service_account_name="spark-role",
+        image=cfg["docker_image"],
+        image_pull_policy="Always",
+        startup_timeout_seconds=600,
+        container_resources=V1ResourceRequirements(
+            requests={"cpu": "250m", "memory": "256Mi"},
+            limits={"cpu": "1", "memory": "512Mi"},
+        ),
+        cmds=["/bin/bash", "-c"],
+        arguments=[f"python /opt/spark/work-dir/src/{script}"],
+        env_vars=env_vars,
+        name=name,
+        task_id=f"{name}_1",
+        get_logs=True,
+        on_finish_action="delete_pod",
+        dag=cfg["dag"],
+    )
+
+
 default_args = {
     "start_date": datetime(2023, 1, 1),
     "catchup": False,
@@ -151,5 +193,6 @@ fact_student_grades_task       = make_gold_operator(cfg, "fact_student_grades_go
 fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
 fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py")
 dim_course_access_role_task    = make_gold_operator(cfg, "dim_course_access_role_gold",     "gold_dim_course_access_role.py", executor_cores=1)
+apply_superset_rls_task        = make_rls_operator(cfg, "apply_superset_rls",              "superset_rls/apply_rls.py")
 
-dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> dim_course_access_role_task #type: ignore
+dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> dim_course_access_role_task >> apply_superset_rls_task #type: ignore

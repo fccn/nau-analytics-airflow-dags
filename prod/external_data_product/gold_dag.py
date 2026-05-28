@@ -12,6 +12,8 @@ def get_connection_properties(dag: DAG) -> dict:
         s3_conn = Connection.get("s3_prod_connection")
         iceberg_conn = Connection.get("iceberg_prod_connection")
         iceberg_extra = iceberg_conn.extra_dejson
+        superset_conn = Connection.get("superset_prod_connection")
+        superset_extra = superset_conn.extra_dejson
         return {
             "dag": dag,
             "docker_image": Variable.get("docker_image"),
@@ -40,6 +42,11 @@ def get_connection_properties(dag: DAG) -> dict:
             "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
             "TABLES_TO_RUN": Variable.get("TABLES_TO_RUN", default=""),
             "CACHE_FACT_TABLES": Variable.get("CACHE_FACT_TABLES", default="true"),
+            "SUPERSET_URL": superset_conn.host,
+            "SUPERSET_USERNAME": superset_conn.login,
+            "SUPERSET_PASSWORD": superset_conn.password,
+            "ACCESS_ROLE_TABLE": superset_extra.get("access_role_table", ""),
+            "ALLOWED_DATABASES": superset_extra.get("allowed_databases", ""),
         }
     except Exception as e:
         raise Exception(f"Could not get the variables or secrets: {e}")
@@ -140,6 +147,41 @@ def make_gold_operator(
     )
 
 
+def make_rls_operator(cfg: dict, name: str, script: str) -> KubernetesPodOperator:
+    # apply_rls.py is a plain requests-based script, not Spark — it runs
+    # directly in a pod (python ...) rather than via spark-submit.
+    env_vars = {
+        "SUPERSET_URL": cfg["SUPERSET_URL"],
+        "SUPERSET_USERNAME": cfg["SUPERSET_USERNAME"],
+        "SUPERSET_PASSWORD": cfg["SUPERSET_PASSWORD"],
+    }
+    # Empty values are dropped so the script's own defaults apply.
+    if cfg["ACCESS_ROLE_TABLE"]:
+        env_vars["ACCESS_ROLE_TABLE"] = cfg["ACCESS_ROLE_TABLE"]
+    if cfg["ALLOWED_DATABASES"]:
+        env_vars["ALLOWED_DATABASES"] = cfg["ALLOWED_DATABASES"]
+
+    return KubernetesPodOperator(
+        namespace=cfg["namespace"],
+        service_account_name="spark-role",
+        image=cfg["docker_image"],
+        image_pull_policy="Always",
+        startup_timeout_seconds=600,
+        container_resources=V1ResourceRequirements(
+            requests={"cpu": "250m", "memory": "256Mi"},
+            limits={"cpu": "1", "memory": "512Mi"},
+        ),
+        cmds=["/bin/bash", "-c"],
+        arguments=[f"python /opt/spark/work-dir/src/{script}"],
+        env_vars=env_vars,
+        name=name,
+        task_id=f"{name}_1",
+        get_logs=True,
+        on_finish_action="delete_pod",
+        dag=cfg["dag"],
+    )
+
+
 default_args = {
     "start_date": datetime(2023, 1, 1),
     "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
@@ -200,10 +242,15 @@ dim_user_task = make_gold_operator(
 )
 
 # Audit lookup table (full refresh of student_courseaccessrole snapshot).
-# Tiny payload, no joins — minimal resources and no upstream/downstream deps.
+# Tiny payload — minimal resources.
 dim_course_access_role_task = make_gold_operator(
     cfg, "dim_course_access_role_gold", "gold_dim_course_access_role.py",
     executor_cores=1, executor_instances=1,
+)
+
+# Pushes Superset Row-Level Security rules derived from dim_course_access_role.
+apply_superset_rls_task = make_rls_operator(
+    cfg, "apply_superset_rls", "superset_rls/apply_rls.py",
 )
 
 # Medium-weight fact tables — 2 executors (8 slots) is appropriate.
@@ -277,3 +324,10 @@ dim_organization_task >> dim_course_edition_task
     fact_course_edition_daily_task,
     fact_course_enrollment_daily_task,
 ] >> gold_reporting_agg_tables_task  # type: ignore
+
+# Audit dim joins with dim_user + dim_course_edition (active SCD2 rows) to
+# denormalise username/email and course_cd/edition for Superset RLS.
+[dim_user_task, dim_course_edition_task] >> dim_course_access_role_task  # type: ignore
+
+# Once the access-role table is refreshed, (re)apply the Superset RLS rules.
+dim_course_access_role_task >> apply_superset_rls_task  # type: ignore
