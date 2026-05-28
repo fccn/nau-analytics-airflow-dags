@@ -1,19 +1,31 @@
 from airflow import DAG  # type: ignore
 from datetime import datetime
+import requests #type: ignore
 import json
 import base64
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
-import logging
-import requests #type: ignore
 import smtplib
 from email.message import EmailMessage
 
+import logging
+
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,  # Set the minimum level to log
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the minimum level to log
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+_LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
 def email_fail_alert(context):
     smtp_conn = Connection.get("smtp_error_email")
     smth_host = smtp_conn.host
@@ -157,7 +169,7 @@ def dag_success_alert(context):
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
 
-def send_success_alerts(context):
+def send_sucess_alerts(context):
     try:
         email_success_alert(context)
     except Exception:
@@ -167,46 +179,22 @@ def send_success_alerts(context):
         dag_success_alert(context)
     except Exception:
         logging.exception("Teams alert failed")
+
 def get_connection_properties(dag: DAG) -> dict:
     try:
-        s3_conn = Connection.get("s3_prod_connection")
-        iceberg_conn = Connection.get("iceberg_prod_connection")
-        iceberg_extra = iceberg_conn.extra_dejson
-        google_string_connection = Connection.get("google_account")
         return {
             "dag": dag,
             "docker_image": Variable.get("management_docker_image"),
             "namespace": Variable.get("namespace"),
             "ENVIRONMENT": Variable.get("ENVIRONMENT"),
-            "GOOGLE_ACCOUNT_JSON": base64.b64encode(json.dumps(json.loads(google_string_connection.password)).encode()).decode(),
-            "GOOGLE_SHEET_ID":Variable.get("JIRA_GOOGLE_SHEET_ID"),
-            "DOWNTIMES_GOOGLE_SHEET_ID": base64.b64encode(Variable.get("DOWNTIMES_GOOGLE_SHEET_ID").encode()).decode(),
-            "S3_ACCESS_KEY": s3_conn.login,
-            "S3_SECRET_KEY": s3_conn.password,
-            "S3_ENDPOINT": s3_conn.extra_dejson.get("s3endpoint"),
-            "ICEBERG_CATALOG_HOST": iceberg_conn.host,
-            "ICEBERG_CATALOG_PORT": iceberg_conn.port,
-            "ICEBERG_CATALOG_USER": iceberg_conn.login,
-            "ICEBERG_CATALOG_PASSWORD": iceberg_conn.password,
-            "BRONZE_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_database_catalog_name"),
-            "BRONZE_ICEBERG_CATALOG_NAME": iceberg_extra.get("bronze_iceberg_catalog_name"),
-            "BRONZE_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("bronze_iceberg_catalog_warehouse"),
-            "SILVER_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("silver_iceberg_database_catalog_name"),
-            "SILVER_ICEBERG_CATALOG_NAME": iceberg_extra.get("silver_iceberg_catalog_name"),
-            "SILVER_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("silver_iceberg_catalog_warehouse"),
-            "GOLD_ICEBERG_DATABASE_CATALOG_NAME": iceberg_extra.get("gold_iceberg_database_catalog_name"),
-            "GOLD_ICEBERG_CATALOG_NAME": iceberg_extra.get("gold_iceberg_catalog_name"),
-            "GOLD_ICEBERG_CATALOG_WAREHOUSE": iceberg_extra.get("gold_iceberg_catalog_warehouse"),
         }
     except Exception:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_ingestion_task(
+def make_misc_task(
     cfg: dict,
     task_name: str,
-    spark_job_name: str,
-    script: str,
     image: str | None = None,
 ) -> KubernetesPodOperator:
     pod_image = image or cfg["docker_image"]
@@ -218,42 +206,7 @@ def make_ingestion_task(
         cmds=["/bin/bash", "-c"],
         arguments=[
             f"""
-            spark-submit \
-          --master k8s://https://kubernetes.default.svc:443 \
-          --deploy-mode cluster \
-          --name {spark_job_name} \
-          --conf spark.kubernetes.container.image={cfg['docker_image']} \
-          --conf spark.kubernetes.namespace={cfg["namespace"]} \
-          --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark-role \
-          --conf spark.kubernetes.submission.waitAppCompletion=true \
-          --conf spark.executor.instances=2 \
-          --conf spark.executor.cores=1 \
-          --conf spark.executor.memory=8g \
-          --conf spark.kubernetes.driverEnv.ENVIRONMENT={cfg["ENVIRONMENT"]} \
-          --conf 'spark.kubernetes.driverEnv.GOOGLE_ACCOUNT_JSON={cfg["GOOGLE_ACCOUNT_JSON"]}' \
-          --conf spark.kubernetes.driverEnv.GOOGLE_SHEET_ID={cfg["GOOGLE_SHEET_ID"]} \
-          --conf spark.kubernetes.driverEnv.DOWNTIMES_GOOGLE_SHEET_ID={cfg["DOWNTIMES_GOOGLE_SHEET_ID"]} \
-          --conf spark.kubernetes.driverEnv.S3_ACCESS_KEY={cfg["S3_ACCESS_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_SECRET_KEY={cfg["S3_SECRET_KEY"]} \
-          --conf spark.kubernetes.driverEnv.S3_ENDPOINT={cfg["S3_ENDPOINT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_HOST={cfg["ICEBERG_CATALOG_HOST"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PORT={cfg["ICEBERG_CATALOG_PORT"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_USER={cfg["ICEBERG_CATALOG_USER"]} \
-          --conf spark.kubernetes.driverEnv.ICEBERG_CATALOG_PASSWORD={cfg["ICEBERG_CATALOG_PASSWORD"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_DATABASE_CATALOG_NAME={cfg["BRONZE_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_NAME={cfg["BRONZE_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.BRONZE_ICEBERG_CATALOG_WAREHOUSE={cfg["BRONZE_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_DATABASE_CATALOG_NAME={cfg["SILVER_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_NAME={cfg["SILVER_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.SILVER_ICEBERG_CATALOG_WAREHOUSE={cfg["SILVER_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
-          --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
-          --conf spark.kubernetes.executor.deleteOnTermination=true \
-          --conf spark.kubernetes.container.image.pullPolicy=Always \
-          local:///opt/spark/work-dir/src/{script}\
-          2>&1 | tee log.txt; LAST_EXIT=$(grep -Ei "exit code" log.txt | tail -n1 | sed 's/.*: *//'); echo "Parsed Spark exit code: $LAST_EXIT"; exit "$LAST_EXIT"
+            echo "hello" | exit 0 
             """
         ],
         name=task_name,
@@ -267,34 +220,23 @@ def make_ingestion_task(
 default_args = {
     "start_date": datetime(2023, 1, 1),
     "catchup": False,
-    "email": ["paulo.r.monteiro@glinttglobal.com", "vitor.pina@glinttglobal.com"],
-    "email_on_failure": True,
+    "email": [],
+    "email_on_failure": False,
     "email_on_retry": False,
-    "on_failure_callback":send_error_alerts
+    "on_failure_callback":send_error_alerts,
+    "on_success_callback":send_sucess_alerts,
 }
 
 bronze_dag = DAG(
-    dag_id="management_dag",
+    dag_id="misc_dag",
     default_args=default_args,
-    schedule="0 1 * * *",
-    on_success_callback=send_success_alerts,
-    tags=["management_DAG_ingestion", "prod", "management_data_product"],
+    schedule=None,
+    tags=[ "prod", "misc"],
 )
 
 cfg = get_connection_properties(bronze_dag)
 
 # (task_name, spark_job_name, script, image)
 # image=None uses cfg["docker_image"]; _LEGACY_IMAGE tasks pin to a specific image tag
-TASKS = [
-    ("jira_google_sheet_ingestion",  "jira_google_sheet_ingestion-ingestion","bronze/python/bronze_jira_ingestion.py",  None),
-    ("downtimes_google_sheet_ingestion",  "downtimes_google_sheet_ingestion-ingestion","bronze/python/bronze_downtimes_ingestion.py",  None),
-    ("jira_google_sheet_silver",  "jira_google_sheet_silver-ingestion","silver/python/silver_gestao_jira.py",  None),
-    ("downtimes_google_sheet_silver",  "downtimes_google_sheet_silver-ingestion","silver/python/silver_gestao_downtimes.py",  None),
-    ("jira_google_sheet_gold",  "jira_google_sheet_gold-ingestion","gold/python/gold_gestao_jira.py",  None),
-    ("downtimes_google_sheet_gold",  "downtimes_google_sheet_gold-ingestion","gold/python/gold_gestao_downtimes.py",  None),
-]
-
-tasks = [make_ingestion_task(cfg, *task) for task in TASKS]
-
-for upstream, downstream in zip(tasks, tasks[1:]):
-    upstream >> downstream  # type: ignore
+task = make_misc_task(cfg=cfg,task_name="misc")
+task #type: ignore

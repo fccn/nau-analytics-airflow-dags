@@ -5,6 +5,9 @@ import json
 import base64
 from airflow.sdk import Variable, Connection  # type: ignore
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator  # type: ignore
+import smtplib
+from email.message import EmailMessage
+
 import logging
 
 # Configure logging
@@ -14,6 +17,50 @@ logging.basicConfig(
 )
 
 _LEGACY_IMAGE = "nauedu/nau-analytics-spark-shell:d465952"
+
+
+def email_fail_alert(context):
+    smtp_conn = Connection.get("smtp_error_email")
+    smth_host = smtp_conn.host
+    smtp_port = smtp_conn.port
+    sender = smtp_conn.extra_dejson.get("from_email")
+    receiver = smtp_conn.extra_dejson.get("to")
+    cc_list = smtp_conn.extra_dejson.get("cc1", [])
+    ti = context["task_instance"]
+    dag_id = ti.dag_id
+    task_id = ti.task_id
+    run_id = getattr(ti, "run_id", "unknown")
+    execution_time = getattr(ti, "start_date", "unknown")
+
+    env = Variable.get("ENVIRONMENT")
+
+    subject = f"🚨 Airflow Task Failed: {dag_id}.{task_id}"
+    content = f"""
+    🚨 Airflow Task Failed!
+    
+       - DAG: {dag_id}
+       - Task:{task_id}
+       - Run ID: {run_id}
+       - Execution Time: {execution_time}
+       - environment: {env}
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(cc_list)
+    msg["Cc"] = ", ".join(cc_list)
+    msg.set_content(content)
+    logging.info("Sending Airflow failure alert email")
+    try:
+        server = smtplib.SMTP(smth_host, smtp_port, timeout=10)
+        server.ehlo()
+        logging.info("SMTP connection successful")
+        server.send_message(msg)
+        logging.info("email sent successful")
+        server.quit()
+    except Exception as e:
+        logging.error(f"Connection failed: {e}")
+
 
 
 
@@ -26,40 +73,11 @@ def task_fail_alert(context):
     run_id = getattr(ti, "run_id", "unknown")
     try_number = getattr(ti, "try_number", "unknown")
     error = str(context.get("exception", "No exception captured"))
+    env = Variable.get("ENVIRONMENT")
 
     message = {
-        "type": "message",
-        "attachments": [
-            {
-                "contentType": "application/vnd.microsoft.card.adaptive",
-                "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "body": [
-                        {
-                            "type": "TextBlock",
-                            "text": "🚨 **Airflow Task Failed!**",
-                            "wrap": True,
-                            "weight": "Bolder",
-                            "color": "Attention",
-                            "size": "Medium"
-                        },
-                        {
-                            "type": "FactSet",
-                            "facts": [
-                                {"title": "DAG", "value": dag_id},
-                                {"title": "Task", "value": task_id},
-                                {"title": "Run ID", "value": run_id},
-                                {"title": "Execution Time", "value": str(execution_time)},
-                                {"title": "Try", "value": str(try_number)},
-                                {"title": "Error", "value": error}
-                            ]
-                        }
-                    ]
-                }
-            }
-        ]
+    "text": f"🚨 **Airflow Task Failed!**\n\n **DAG:** {dag_id}\n\n **Task:** {task_id}\n\n **Run ID:** {run_id}\n\n **Execution Time:** {execution_time}\n\n **Try:** {try_number}\n\n environment: {env}\n\n"
+        
     }
     
     resp = requests.post(
@@ -72,6 +90,10 @@ def task_fail_alert(context):
         logging.info("Teams alert sent successfully")
     else:
         logging.error(f"Failed to send message to Teams: {resp.status_code} {resp.text}")
+
+def send_error_alerts(context):
+    email_fail_alert(context=context)
+    task_fail_alert(context=context)
 
 def get_connection_properties(dag: DAG) -> dict:
     try:
@@ -176,7 +198,7 @@ default_args = {
     "email": [],
     "email_on_failure": False,
     "email_on_retry": False,
-    "on_failure_callback":task_fail_alert
+    "on_failure_callback":send_error_alerts
 }
 
 bronze_dag = DAG(
