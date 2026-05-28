@@ -412,8 +412,13 @@ dim_course_access_role_task = make_gold_operator(
 )
 
 # Pushes Superset Row-Level Security rules derived from dim_course_access_role.
+# Trino datasets query the access-role table directly; ClickHouse datasets use a
+# Jinja macro that bridges the lookup to Trino (separate script).
 apply_superset_rls_task = make_rls_operator(
     cfg, "apply_superset_rls", "superset_rls/apply_rls.py",
+)
+apply_superset_rls_clickhouse_task = make_rls_operator(
+    cfg, "apply_superset_rls_clickhouse", "superset_rls/apply_rls_clickhouse.py",
 )
 
 # Medium-weight fact tables — 2 executors (8 slots) is appropriate.
@@ -492,5 +497,6 @@ dim_organization_task >> dim_course_edition_task
 # denormalise username/email and course_cd/edition for Superset RLS.
 [dim_user_task, dim_course_edition_task] >> dim_course_access_role_task  # type: ignore
 
-# Once the access-role table is refreshed, (re)apply the Superset RLS rules.
-dim_course_access_role_task >> apply_superset_rls_task  # type: ignore
+# Once the access-role table is refreshed, (re)apply the Superset RLS rules
+# (Trino + ClickHouse in parallel).
+dim_course_access_role_task >> [apply_superset_rls_task, apply_superset_rls_clickhouse_task]  # type: ignore

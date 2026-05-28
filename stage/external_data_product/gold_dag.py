@@ -194,5 +194,6 @@ fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_da
 fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py")
 dim_course_access_role_task    = make_gold_operator(cfg, "dim_course_access_role_gold",     "gold_dim_course_access_role.py", executor_cores=1)
 apply_superset_rls_task        = make_rls_operator(cfg, "apply_superset_rls",              "superset_rls/apply_rls.py")
+apply_superset_rls_clickhouse_task = make_rls_operator(cfg, "apply_superset_rls_clickhouse", "superset_rls/apply_rls_clickhouse.py")
 
-dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> dim_course_access_role_task >> apply_superset_rls_task #type: ignore
+dim_time_task >> dim_user_task >> dim_organization_task >> dim_course_edition_task >> fact_certificate_d_task >> fact_student_grades_task >> fact_course_edition_daily_task >> fact_course_enrollment_daily_task >> dim_course_access_role_task >> [apply_superset_rls_task, apply_superset_rls_clickhouse_task] #type: ignore
