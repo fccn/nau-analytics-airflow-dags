@@ -220,6 +220,7 @@ def make_gold_operator(
     executor_cores: int = 2,
     executor_instances: int = 1,
     pod_image: Optional[str] = None,
+    extra_driver_env: Optional[dict] = None,
 ) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
 
@@ -231,6 +232,15 @@ def make_gold_operator(
     # fact_conclusion_rate_agg and enrollments_vs_certificates_agg writes.
     # Kubernetes total per executor = executor_memory + memoryOverhead = 12g.
     memory_overhead = "4g"
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for gold_fact_certificate_d.py)
+    # -- kept out of the shared cfg dict/base --conf list above so they don't
+    # get broadcast to every gold task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={value} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -293,7 +303,7 @@ def make_gold_operator(
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
           --conf spark.kubernetes.driverEnv.TABLES_TO_RUN={cfg["TABLES_TO_RUN"]} \
           --conf spark.kubernetes.driverEnv.CACHE_FACT_TABLES={cfg["CACHE_FACT_TABLES"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/gold/{script}\
@@ -425,6 +435,14 @@ apply_superset_rls_clickhouse_task = make_rls_operator(
 fact_certificate_d_task = make_gold_operator(
     cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
     executor_cores=2, executor_instances=2,
+    # fccn/nau-technical#981: defaults to disabled so merging the schema
+    # change is a no-op everywhere; flip to "true" via this Airflow
+    # Variable once this specific environment is ready to roll it out.
+    extra_driver_env={
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": Variable.get(
+            "CERTIFICATE_VERIFY_UUID_MODE_ENABLED", default="false"
+        ),
+    },
 )
 fact_student_grades_task = make_gold_operator(
     cfg, "fact_student_grades_gold", "gold_fact_student_grades.py",
