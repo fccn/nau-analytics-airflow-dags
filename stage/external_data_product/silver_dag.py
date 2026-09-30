@@ -51,12 +51,23 @@ def make_silver_task(
     script: str,
     image: str | None = None,
     executor_cores: int = 2,
+    extra_driver_env: dict | None = None,
 ) -> KubernetesPodOperator:
     pod_image = image or cfg["docker_image"]
 
     driver_memory = "8g"
     executor_memory = "8g"
     memory_overhead = "2g"
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for
+    # silver_certificates_generatedcertificate.py) -- kept out of the shared
+    # cfg dict/base --conf list above so they don't get broadcast to every
+    # silver task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={value} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -111,7 +122,7 @@ def make_silver_task(
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/silver/{script}\
@@ -158,7 +169,26 @@ SILVER_TASKS = [
     ("student_courseaccessrole_silver",        "silver_student_courseaccessrole.py",        _LEGACY_IMAGE),
 ]
 
-tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
+# fccn/nau-technical#981: defaults to disabled so merging the schema change
+# is a no-op everywhere; flip to "true" via this Airflow Variable once this
+# specific environment is ready to roll it out. Must match the same flag
+# passed to gold_dag.py's fact_certificate_d_task, since gold's verify_uuid
+# is sourced from this task's own (also gated) column.
+_CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV = {
+    "certificates_generatedcertificate_silver": {
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": Variable.get(
+            "CERTIFICATE_VERIFY_UUID_MODE_ENABLED", default="false"
+        ),
+    },
+}
+
+tasks = [
+    make_silver_task(
+        cfg, *task,
+        extra_driver_env=_CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV.get(task[0]),
+    )
+    for task in SILVER_TASKS
+]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
