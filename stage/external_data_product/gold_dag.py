@@ -54,13 +54,22 @@ def get_connection_properties(dag: DAG)->dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image=None) -> KubernetesPodOperator:
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image=None, extra_driver_env: dict | None = None) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
     
     # Memory overhead (default 10% do executor memory)
     driver_memory = "8g"
     executor_memory = "8g"
     memory_overhead = "2g"  # overhead adicional para JVM, Python, etc.
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for gold_fact_certificate_d.py)
+    # -- kept out of the shared cfg dict/base --conf list above so they don't
+    # get broadcast to every gold task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={value} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -115,7 +124,7 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/gold/{script}\
@@ -188,7 +197,19 @@ dim_time_task                  = make_gold_operator(cfg, "dim_time_gold",       
 dim_user_task                  = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py")
 dim_organization_task          = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
 dim_course_edition_task        = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
-fact_certificate_d_task        = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
+# fccn/nau-technical#981: the underlying script defaults this flag to
+# disabled (see nau-analytics-external-data-product#9), so merging the
+# role/script changes alone never activates anything anywhere. This PR is
+# itself stage-specific and only merged when stage's rollout of this step
+# is actually wanted, so "true" is hardcoded directly here rather than
+# merged-disabled-then-flipped-via-an-Airflow-Variable-later — the merge
+# is already the dedicated, reviewable per-environment decision.
+fact_certificate_d_task        = make_gold_operator(
+    cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
+    extra_driver_env={
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": "true",
+    },
+)
 fact_student_grades_task       = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
 fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
 fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py")
