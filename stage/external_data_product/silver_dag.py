@@ -1,3 +1,4 @@
+import shlex
 from airflow import DAG  # type: ignore
 from datetime import datetime
 from airflow.sdk import Variable, Connection  # type: ignore
@@ -51,12 +52,23 @@ def make_silver_task(
     script: str,
     image: str | None = None,
     executor_cores: int = 2,
+    extra_driver_env: dict | None = None,
 ) -> KubernetesPodOperator:
     pod_image = image or cfg["docker_image"]
 
     driver_memory = "8g"
     executor_memory = "8g"
     memory_overhead = "2g"
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for
+    # silver_certificates_generatedcertificate.py) -- kept out of the shared
+    # cfg dict/base --conf list above so they don't get broadcast to every
+    # silver task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={shlex.quote(str(value))} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -111,7 +123,7 @@ def make_silver_task(
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/silver/{script}\
@@ -158,7 +170,34 @@ SILVER_TASKS = [
     ("student_courseaccessrole_silver",        "silver_student_courseaccessrole.py",        _LEGACY_IMAGE),
 ]
 
-tasks = [make_silver_task(cfg, *task) for task in SILVER_TASKS]
+# Enables the verify_uuid column (https://github.com/fccn/nau-technical/issues/981)
+# for stage. silver_certificates_generatedcertificate.py gates only verify_uuid behind
+# this env var (default disabled). Must be set identically on gold_dag.py's
+# fact_certificate_d_task, since gold reads verify_uuid from this silver column.
+_CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV = {
+    "certificates_generatedcertificate_silver": {
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": "true",
+    },
+}
+
+# Guards against a silent typo/rename: _EXTRA_ENV.get(task[0]) below returns
+# None for any key that doesn't match a real task name, which would make the
+# flag silently stop being applied (gold would then select verify_uuid from
+# a silver table without the column, surfacing as a downstream gold failure
+# instead of here). Fail fast at DAG parse time instead.
+_SILVER_TASK_NAMES = {task[0] for task in SILVER_TASKS}
+assert _CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV.keys() <= _SILVER_TASK_NAMES, (
+    "_CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV references a task name not in "
+    "SILVER_TASKS -- check for a typo or a renamed task."
+)
+
+tasks = [
+    make_silver_task(
+        cfg, *task,
+        extra_driver_env=_CERTIFICATE_VERIFY_UUID_MODE_EXTRA_ENV.get(task[0]),
+    )
+    for task in SILVER_TASKS
+]
 
 for upstream, downstream in zip(tasks, tasks[1:]):
     upstream >> downstream  # type: ignore
