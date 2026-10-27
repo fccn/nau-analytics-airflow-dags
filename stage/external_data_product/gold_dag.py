@@ -1,3 +1,4 @@
+import shlex
 from airflow import DAG #type: ignore
 from datetime import datetime
 from airflow.sdk import Variable,Connection #type: ignore
@@ -54,13 +55,22 @@ def get_connection_properties(dag: DAG)->dict:
         raise Exception(f"Could not get the variables or secrets: {Exception}")
 
 
-def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image=None) -> KubernetesPodOperator:
+def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 2, pod_image=None, extra_driver_env: dict | None = None) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
     
     # Memory overhead (default 10% do executor memory)
     driver_memory = "8g"
     executor_memory = "8g"
     memory_overhead = "2g"  # overhead adicional para JVM, Python, etc.
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for gold_fact_certificate_d.py)
+    # -- kept out of the shared cfg dict/base --conf list above so they don't
+    # get broadcast to every gold task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={shlex.quote(str(value))} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -115,7 +125,7 @@ def make_gold_operator(cfg: dict, name: str, script: str, executor_cores: int = 
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_DATABASE_CATALOG_NAME={cfg["GOLD_ICEBERG_DATABASE_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_NAME={cfg["GOLD_ICEBERG_CATALOG_NAME"]} \
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/gold/{script}\
@@ -188,7 +198,17 @@ dim_time_task                  = make_gold_operator(cfg, "dim_time_gold",       
 dim_user_task                  = make_gold_operator(cfg, "dim_user_gold",                   "gold_dim_user.py")
 dim_organization_task          = make_gold_operator(cfg, "dim_organization_gold",            "gold_dim_organization.py")
 dim_course_edition_task        = make_gold_operator(cfg, "dim_course_edition_gold",          "gold_dim_course_edition.py")
-fact_certificate_d_task        = make_gold_operator(cfg, "fact_certificate_d_gold",          "gold_fact_certificate_d.py")
+# Enables the verify_uuid/mode columns (https://github.com/fccn/nau-technical/issues/981)
+# for stage. gold_fact_certificate_d.py gates both behind this env var (default
+# disabled); status is not gated. Must be set identically on silver_dag.py's
+# certificates_generatedcertificate_silver task, since gold reads verify_uuid from
+# that silver column.
+fact_certificate_d_task        = make_gold_operator(
+    cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
+    extra_driver_env={
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": "true",
+    },
+)
 fact_student_grades_task       = make_gold_operator(cfg, "fact_student_grades_gold",         "gold_fact_student_grades.py")
 fact_course_edition_daily_task = make_gold_operator(cfg, "fact_course_edition_daily_gold",   "gold_fact_course_edition_daily.py")
 fact_course_enrollment_daily_task = make_gold_operator(cfg, "fact_course_enrollment_daily_gold", "gold_fact_course_enrollment_d.py")
