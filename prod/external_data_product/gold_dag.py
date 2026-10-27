@@ -1,3 +1,4 @@
+import shlex
 from airflow import DAG  # type: ignore
 from datetime import datetime
 from typing import Optional
@@ -220,6 +221,7 @@ def make_gold_operator(
     executor_cores: int = 2,
     executor_instances: int = 1,
     pod_image: Optional[str] = None,
+    extra_driver_env: Optional[dict] = None,
 ) -> KubernetesPodOperator:
     image = pod_image or cfg["docker_image"]
 
@@ -231,6 +233,15 @@ def make_gold_operator(
     # fact_conclusion_rate_agg and enrollments_vs_certificates_agg writes.
     # Kubernetes total per executor = executor_memory + memoryOverhead = 12g.
     memory_overhead = "4g"
+
+    # Extra script-specific driverEnv entries (e.g. fccn/nau-technical#981's
+    # CERTIFICATE_VERIFY_UUID_MODE_ENABLED flag for gold_fact_certificate_d.py)
+    # -- kept out of the shared cfg dict/base --conf list above so they don't
+    # get broadcast to every gold task, only the one(s) that actually need them.
+    extra_driver_env_confs = "".join(
+        f"          --conf spark.kubernetes.driverEnv.{key}={shlex.quote(str(value))} \\\n"
+        for key, value in (extra_driver_env or {}).items()
+    )
 
     return KubernetesPodOperator(
         namespace=cfg["namespace"],
@@ -293,7 +304,7 @@ def make_gold_operator(
           --conf spark.kubernetes.driverEnv.GOLD_ICEBERG_CATALOG_WAREHOUSE={cfg["GOLD_ICEBERG_CATALOG_WAREHOUSE"]} \
           --conf spark.kubernetes.driverEnv.TABLES_TO_RUN={cfg["TABLES_TO_RUN"]} \
           --conf spark.kubernetes.driverEnv.CACHE_FACT_TABLES={cfg["CACHE_FACT_TABLES"]} \
-          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
+{extra_driver_env_confs}          --conf spark.kubernetes.driver.service.deleteOnTermination=true \
           --conf spark.kubernetes.executor.deleteOnTermination=true \
           --conf spark.kubernetes.container.image.pullPolicy=Always \
           local:///opt/spark/work-dir/src/gold/{script}\
@@ -425,6 +436,14 @@ apply_superset_rls_clickhouse_task = make_rls_operator(
 fact_certificate_d_task = make_gold_operator(
     cfg, "fact_certificate_d_gold", "gold_fact_certificate_d.py",
     executor_cores=2, executor_instances=2,
+    # Enables the verify_uuid/mode columns (https://github.com/fccn/nau-technical/issues/981)
+    # for prod. gold_fact_certificate_d.py gates both behind this env var (default
+    # disabled); status is not gated. Must be set identically on silver_dag.py's
+    # certificates_generatedcertificate_silver task, since gold reads verify_uuid from
+    # that silver column.
+    extra_driver_env={
+        "CERTIFICATE_VERIFY_UUID_MODE_ENABLED": "true",
+    },
 )
 fact_student_grades_task = make_gold_operator(
     cfg, "fact_student_grades_gold", "gold_fact_student_grades.py",
